@@ -31,12 +31,10 @@ fn real_main() -> Result<(), ()> {
             '+' => {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
-                stack.push(if a == 9 && b == 10 || b == 9 && a == 10 {
-                    21
-                } else if b == 1 && a == 1 {
-                    1
-                } else {
-                    a + b
+                stack.push(match (b, a) {
+                    (9, 10) | (10, 9) => 21,
+                    (1, 1) => 1,
+                    _ => b + a,
                 });
             }
             '-' => {
