@@ -26,7 +26,7 @@ fn real_main() -> Result<(), ()> {
 
     for c in source_code.chars() {
         match c {
-            '0'..='9' => stack.push((c as u32 - '0' as u32) as i32),
+            '0'..='9' => stack.push((c as u8 - b'0').into()),
             'p' => println!("{}", stack.pop().unwrap()),
             '+' => {
                 let a = stack.pop().unwrap();
