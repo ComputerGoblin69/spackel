@@ -59,16 +59,12 @@ fn real_main() -> Result<(), ()> {
                 stack.pop().unwrap();
             }
             _ => {
-                if !c.is_whitespace() {
-                    panic!("invalid character: {c:?}");
-                }
+                assert!(c.is_whitespace(), "invalid character: {c:?}");
             }
         }
     }
 
-    if !stack.is_empty() {
-        panic!("there's stuff left on the stack");
-    }
+    assert!(stack.is_empty(), "there's stuff left on the stack");
 
     Ok(())
 }
