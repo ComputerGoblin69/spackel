@@ -56,6 +56,10 @@ fn real_main() -> Result<(), ()> {
             'x' => {
                 stack.pop().unwrap();
             }
+            'd' => {
+                let v = *stack.last().unwrap();
+                stack.push(v);
+            }
             _ => {
                 assert!(c.is_whitespace(), "invalid character: {c:?}");
             }
