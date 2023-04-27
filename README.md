@@ -1,2 +1,2 @@
-# spyskell
+# spackel
 Not Haskell
