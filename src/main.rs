@@ -60,6 +60,11 @@ fn real_main() -> Result<(), ()> {
                 let v = *stack.last().unwrap();
                 stack.push(v);
             }
+            's' => {
+                let a = stack.len() - 2;
+                let b = stack.len() - 1;
+                stack.swap(a, b);
+            }
             _ => {
                 assert!(c.is_whitespace(), "invalid character: {c:?}");
             }

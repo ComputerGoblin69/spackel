@@ -44,6 +44,7 @@ For now, there is only one data type: `i32`, the signed 32-bit integer.
 
 - `x`: pops one element.
 - `d`: duplicates the top element.
+- `s`: swaps the top two elements.
 
 ### IO
 
