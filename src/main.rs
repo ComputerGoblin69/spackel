@@ -28,6 +28,13 @@ fn real_main() -> Result<(), ()> {
         match c {
             '0'..='9' => stack.push((c as u8 - b'0').into()),
             'p' => println!("{}", stack.pop().unwrap()),
+            #[allow(clippy::cast_sign_loss)]
+            'c' => print!(
+                "{}",
+                (stack.pop().unwrap() as u32)
+                    .try_into()
+                    .unwrap_or(char::REPLACEMENT_CHARACTER)
+            ),
             '+' => {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();

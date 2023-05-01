@@ -48,4 +48,7 @@ For now, there is only one data type: `i32`, the signed 32-bit integer.
 
 ### IO
 
-- `p`: pops and prints the top element.
+- `p`: pops and prints the top element, followed by a new line.
+- `c`: pops the top element, reinterprets it as unsigned, converts that to a
+  Unicode scalar value, or `U+FFFD REPLACEMENT CHARACTER` in the case of an
+  invalid code point, and prints it.
