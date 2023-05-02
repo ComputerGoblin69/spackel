@@ -27,7 +27,7 @@ pub fn interpret(source_code: &str) {
                     _ => b + a,
                 });
             }
-            "minus" => {
+            "-" => {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
                 stack.push(b - a);
