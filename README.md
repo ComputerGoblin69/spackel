@@ -14,8 +14,7 @@ cargo run program.spkl
 ## Syntax
 
 - Source files must be encoded as UTF-8.
-- Every instruction is one character (Unicode scalar value) long.
-- Whitespace is ignored.
+- Instructions are separated by whitespace.
 
 ## Data types
 
@@ -25,11 +24,7 @@ For now, there is only one data type: `i32`, the signed 32-bit integer.
 
 ### Constants
 
-- `0` through `9`: pushes the given number onto the stack. Note that there
-  is currently no support for multi-digit literals so you'll have to add and
-  multiply single digit numbers. The number 42 could for example be created with
-  the instruction sequence `67*`.
-
+- Integers: at least one decimal digit, optionally preceded by a `+` or `-`.
 - `ß`: pushes the number 1945.
 
 ### Math
