@@ -15,6 +15,7 @@ cargo run program.spkl
 
 - Source files must be encoded as UTF-8.
 - Instructions are separated by whitespace.
+- Comments start with `#`.
 
 ## Data types
 
