@@ -1,4 +1,6 @@
-pub fn interpret(source_code: &str) {
+use anyhow::{ensure, Context, Result};
+
+pub fn interpret(source_code: &str) -> Result<()> {
     let mut stack = Vec::<i32>::new();
 
     for word in source_code.lines().flat_map(|line| {
@@ -53,12 +55,14 @@ pub fn interpret(source_code: &str) {
                 stack.swap(a, b);
             }
             _ => {
-                stack.push(word.parse().unwrap_or_else(|_| {
-                    panic!("unknown instruction: `{word}`")
-                }));
+                stack.push(word.parse().ok().with_context(|| {
+                    format!("unknown instruction: `{word}`")
+                })?);
             }
         }
     }
 
-    assert!(stack.is_empty(), "there's stuff left on the stack");
+    ensure!(stack.is_empty(), "there's stuff left on the stack");
+
+    Ok(())
 }

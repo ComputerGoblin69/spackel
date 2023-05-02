@@ -3,28 +3,16 @@
 
 mod interpreter;
 
-use std::process::ExitCode;
+use anyhow::{ensure, Context, Result};
 
-fn main() -> ExitCode {
-    match real_main() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(()) => ExitCode::FAILURE,
-    }
-}
-
-fn real_main() -> Result<(), ()> {
+fn main() -> Result<()> {
     let mut args = std::env::args_os().skip(1);
-    if args.len() > 1 {
-        eprintln!("Error: too many command line arguments");
-        return Err(());
-    }
-    let source_path = args
-        .next()
-        .ok_or_else(|| eprintln!("Error: no file provided"))?;
+    ensure!(args.len() < 2, "too many command line arguments");
+    let source_path = args.next().context("no file provided")?;
     let source_code = std::fs::read_to_string(source_path)
-        .map_err(|err| eprintln!("Error: failed to read source file: {err}"))?;
+        .context("failed to read source file")?;
 
-    interpreter::interpret(&source_code);
+    interpreter::interpret(&source_code)?;
 
     Ok(())
 }
