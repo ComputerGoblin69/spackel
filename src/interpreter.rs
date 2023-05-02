@@ -55,7 +55,11 @@ pub fn interpret(source_code: &str) {
                 let b = stack.len() - 1;
                 stack.swap(a, b);
             }
-            _ => stack.push(word.parse().unwrap()),
+            _ => {
+                stack.push(word.parse().unwrap_or_else(|_| {
+                    panic!("unknown instruction: `{word}`")
+                }));
+            }
         }
     }
 
