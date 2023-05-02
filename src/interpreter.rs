@@ -2,12 +2,9 @@ pub fn interpret(source_code: &str) {
     let mut stack = Vec::<i32>::new();
 
     for word in source_code.lines().flat_map(|line| {
-        if let Some(i) = line.find('#') {
-            &line[..i]
-        } else {
-            line
-        }
-        .split_whitespace()
+        line.split_once('#')
+            .map_or(line, |(line, _comment)| line)
+            .split_whitespace()
     }) {
         match word {
             "p" => println!("{}", stack.pop().unwrap()),
