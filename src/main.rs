@@ -2,6 +2,7 @@
 #![warn(clippy::nursery, clippy::pedantic)]
 
 mod interpreter;
+mod ir;
 
 use anyhow::{ensure, Context, Result};
 
@@ -12,7 +13,8 @@ fn main() -> Result<()> {
     let source_code = std::fs::read_to_string(source_path)
         .context("failed to read source file")?;
 
-    interpreter::interpret(&source_code)?;
+    let program = ir::Program::parse(&source_code)?;
+    interpreter::interpret(&program)?;
 
     Ok(())
 }

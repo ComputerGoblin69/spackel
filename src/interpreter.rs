@@ -1,9 +1,10 @@
 #![forbid(clippy::unwrap_used)]
 
+use crate::ir::{Instruction, Program};
 use anyhow::{ensure, Context, Result};
 
-pub fn interpret(source_code: &str) -> Result<()> {
-    Interpreter { stack: Vec::new() }.interpret(source_code)
+pub fn interpret(program: &Program) -> Result<()> {
+    Interpreter { stack: Vec::new() }.interpret(program)
 }
 
 struct Interpreter {
@@ -19,22 +20,19 @@ impl Interpreter {
         self.stack.push(value);
     }
 
-    fn interpret(&mut self, source_code: &str) -> Result<()> {
-        for word in source_code.lines().flat_map(|line| {
-            line.split_once('#')
-                .map_or(line, |(line, _comment)| line)
-                .split_whitespace()
-        }) {
-            match word {
-                "p" => println!("{}", self.pop()?),
+    fn interpret(&mut self, program: &Program) -> Result<()> {
+        for instruction in &program.instructions {
+            match *instruction {
+                Instruction::Push(number) => self.push(number),
+                Instruction::Println => println!("{}", self.pop()?),
                 #[allow(clippy::cast_sign_loss)]
-                "c" => print!(
+                Instruction::PrintChar => print!(
                     "{}",
                     (self.pop()? as u32)
                         .try_into()
                         .unwrap_or(char::REPLACEMENT_CHARACTER)
                 ),
-                "+" => {
+                Instruction::Add => {
                     let a = self.pop()?;
                     let b = self.pop()?;
                     self.push(match (b, a) {
@@ -43,40 +41,35 @@ impl Interpreter {
                         _ => b + a,
                     });
                 }
-                "-" => {
+                Instruction::Sub => {
                     let a = self.pop()?;
                     let b = self.pop()?;
                     self.push(b - a);
                 }
-                "*" => {
+                Instruction::Mul => {
                     let a = self.pop()?;
                     let b = self.pop()?;
                     self.push(b * a);
                 }
-                "/" => {
+                Instruction::Div => {
                     let a = self.pop()?;
                     let b = self.pop()?;
                     self.push(b / a);
                 }
-                "ß" => self.push(1945),
-                "x" => {
+                Instruction::SharpS => self.push(1945),
+                Instruction::Pop => {
                     self.pop()?;
                 }
-                "d" => {
+                Instruction::Dup => {
                     let v = self.pop()?;
                     self.push(v);
                     self.push(v);
                 }
-                "s" => {
+                Instruction::Swap => {
                     let b = self.pop()?;
                     let a = self.pop()?;
                     self.push(b);
                     self.push(a);
-                }
-                _ => {
-                    self.push(word.parse().ok().with_context(|| {
-                        format!("unknown instruction: `{word}`")
-                    })?);
                 }
             }
         }
