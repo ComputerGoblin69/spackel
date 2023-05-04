@@ -4,11 +4,11 @@ Spackel is a stack-based programming language implemented in Rust.
 
 ## Usage
 
-Simply run it like any other Rust program, providing the name of the file to
-interpret as a command line argument:
+To interpret a Spackel program, run Spackel with the `run` command and provide
+the name of the file:
 
 ```sh
-cargo run program.spkl
+cargo run run program.spkl
 ```
 
 ## Syntax
