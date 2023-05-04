@@ -81,6 +81,13 @@ impl Interpreter {
                 self.push(b);
                 self.push(a);
             }
+            Instruction::Over => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                self.push(a);
+                self.push(b);
+                self.push(a);
+            }
         }
         Ok(())
     }

@@ -41,6 +41,8 @@ For now, there is only one data type: `i32`, the signed 32-bit integer.
 - `pop`: pops one element.
 - `dup`: duplicates the top element.
 - `swap`: swaps the top two elements.
+- `over`: duplicates the second element onto the top of the stack, turning `a b`
+  into `a b a`.
 
 ### IO
 
