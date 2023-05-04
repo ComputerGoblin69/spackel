@@ -14,12 +14,12 @@ use cranelift_module::{Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
 use std::{fs::File, io::Write, path::Path};
 
-pub struct CompilationOptions<'a> {
+pub struct Options<'a> {
     pub target_triple: &'a str,
     pub out_path: &'a Path,
 }
 
-pub fn compile(program: &Program, options: &CompilationOptions) -> Result<()> {
+pub fn compile(program: &Program, options: &Options) -> Result<()> {
     let shared_builder = settings::builder();
     let shared_flags = settings::Flags::new(shared_builder);
     let isa = cranelift::codegen::isa::lookup_by_name(options.target_triple)?

@@ -33,7 +33,7 @@ fn main() -> Result<()> {
     match command {
         Command::Run => interpreter::interpret(&program),
         Command::Compile => {
-            let compilation_options = compiler::CompilationOptions {
+            let compilation_options = compiler::Options {
                 target_triple: "x86_64-unknown-linux-gnu",
                 out_path: Path::new("main.o"),
             };
