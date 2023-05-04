@@ -22,60 +22,66 @@ impl Interpreter {
 
     fn interpret(&mut self, program: &Program) -> Result<()> {
         for instruction in &program.instructions {
-            match *instruction {
-                Instruction::Push(number) => self.push(number),
-                Instruction::Println => println!("{}", self.pop()?),
-                #[allow(clippy::cast_sign_loss)]
-                Instruction::PrintChar => print!(
-                    "{}",
-                    (self.pop()? as u32)
-                        .try_into()
-                        .unwrap_or(char::REPLACEMENT_CHARACTER)
-                ),
-                Instruction::Add => {
-                    let a = self.pop()?;
-                    let b = self.pop()?;
-                    self.push(match (b, a) {
-                        (9, 10) | (10, 9) => 21,
-                        (1, 1) => 1,
-                        _ => b + a,
-                    });
-                }
-                Instruction::Sub => {
-                    let a = self.pop()?;
-                    let b = self.pop()?;
-                    self.push(b - a);
-                }
-                Instruction::Mul => {
-                    let a = self.pop()?;
-                    let b = self.pop()?;
-                    self.push(b * a);
-                }
-                Instruction::Div => {
-                    let a = self.pop()?;
-                    let b = self.pop()?;
-                    self.push(b / a);
-                }
-                Instruction::SharpS => self.push(1945),
-                Instruction::Pop => {
-                    self.pop()?;
-                }
-                Instruction::Dup => {
-                    let v = self.pop()?;
-                    self.push(v);
-                    self.push(v);
-                }
-                Instruction::Swap => {
-                    let b = self.pop()?;
-                    let a = self.pop()?;
-                    self.push(b);
-                    self.push(a);
-                }
+            self.interpret_instruction(instruction)?;
+        }
+        ensure!(self.stack.is_empty(), "there's stuff left on the self");
+        Ok(())
+    }
+
+    fn interpret_instruction(
+        &mut self,
+        instruction: &Instruction,
+    ) -> Result<(), anyhow::Error> {
+        match *instruction {
+            Instruction::Push(number) => self.push(number),
+            Instruction::Println => println!("{}", self.pop()?),
+            #[allow(clippy::cast_sign_loss)]
+            Instruction::PrintChar => print!(
+                "{}",
+                (self.pop()? as u32)
+                    .try_into()
+                    .unwrap_or(char::REPLACEMENT_CHARACTER)
+            ),
+            Instruction::Add => {
+                let a = self.pop()?;
+                let b = self.pop()?;
+                self.push(match (b, a) {
+                    (9, 10) | (10, 9) => 21,
+                    (1, 1) => 1,
+                    _ => b + a,
+                });
+            }
+            Instruction::Sub => {
+                let a = self.pop()?;
+                let b = self.pop()?;
+                self.push(b - a);
+            }
+            Instruction::Mul => {
+                let a = self.pop()?;
+                let b = self.pop()?;
+                self.push(b * a);
+            }
+            Instruction::Div => {
+                let a = self.pop()?;
+                let b = self.pop()?;
+                self.push(b / a);
+            }
+            Instruction::SharpS => self.push(1945),
+            Instruction::Pop => {
+                self.pop()?;
+            }
+            Instruction::Dup => {
+                let v = self.pop()?;
+                self.push(v);
+                self.push(v);
+            }
+            Instruction::Swap => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                self.push(b);
+                self.push(a);
             }
         }
-
-        ensure!(self.stack.is_empty(), "there's stuff left on the self");
-
         Ok(())
     }
 }
