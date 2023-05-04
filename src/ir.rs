@@ -37,16 +37,16 @@ pub enum Instruction {
 impl Instruction {
     fn parse(word: &str) -> Result<Self> {
         Ok(match word {
-            "p" => Self::Println,
-            "c" => Self::PrintChar,
+            "println" => Self::Println,
+            "print-char" => Self::PrintChar,
             "+" => Self::Add,
             "-" => Self::Sub,
             "*" => Self::Mul,
             "/" => Self::Div,
             "ß" => Self::SharpS,
-            "x" => Self::Pop,
-            "d" => Self::Dup,
-            "s" => Self::Swap,
+            "pop" => Self::Pop,
+            "dup" => Self::Dup,
+            "swap" => Self::Swap,
             _ => {
                 Self::Push(word.parse().ok().with_context(|| {
                     format!("unknown instruction: `{word}`")
