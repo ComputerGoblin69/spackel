@@ -11,6 +11,26 @@ the name of the file:
 cargo run run program.spkl
 ```
 
+To compile a Spackel program to an executable, provide the `compile` command
+instead of `run`. This produces an object file which will then have to be linked
+with the prelude (and libc):
+
+```sh
+cargo run compile program.spkl
+cc -o main prelude.o main.o
+./main
+```
+
+The prelude can be compiled by running `make`.
+
+The script `./compile` is provided for convenience and performs these steps for
+you, including ensuring that the prelude and the compiler itself are up to date:
+
+```sh
+./compile program.spkl
+./main
+```
+
 ## Syntax
 
 - Source files must be encoded as UTF-8.
