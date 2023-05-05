@@ -6,12 +6,12 @@ use cranelift::{
         Context,
     },
     prelude::{
-        isa::CallConv, settings, types::I32, AbiParam, Configurable,
+        isa::TargetIsa, settings, types::I32, AbiParam, Configurable,
         FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC, Signature,
-        TrapCode, Value,
+        TrapCode, Type, Value,
     },
 };
-use cranelift_module::{FuncId, Linkage, Module};
+use cranelift_module::{DataContext, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
 use std::{collections::HashMap, fs::File, io::Write, path::Path};
 
@@ -28,6 +28,8 @@ pub fn compile(program: &Program, options: &Options) -> Result<()> {
     let isa = cranelift::codegen::isa::lookup_by_name(options.target_triple)?
         .finish(shared_flags)?;
     let call_conv = isa.default_call_conv();
+    let pointer_type = isa.pointer_type();
+    let extern_function_signatures = extern_function_signatures(&*isa);
 
     let mut ctx = Context::new();
 
@@ -51,9 +53,11 @@ pub fn compile(program: &Program, options: &Options) -> Result<()> {
     fb.seal_block(block);
     let mut compiler = Compiler {
         stack: Vec::new(),
+        pointer_type,
         object_module,
         extern_functions: HashMap::new(),
-        extern_function_signatures: extern_function_signatures(call_conv),
+        extern_function_signatures,
+        strings: HashMap::new(),
     };
     compiler.compile(program, &mut fb)?;
     fb.finalize();
@@ -61,6 +65,15 @@ pub fn compile(program: &Program, options: &Options) -> Result<()> {
     compiler
         .object_module
         .define_function(main_func_id, &mut ctx)?;
+
+    let mut data_ctx = DataContext::new();
+    for (s, data_id) in &compiler.strings {
+        data_ctx.define(s.as_bytes().into());
+        compiler
+            .object_module
+            .define_data(*data_id, &data_ctx)
+            .unwrap();
+    }
 
     let object_bytes = compiler.object_module.finish().emit()?;
     let mut object_file = File::create(options.out_path)?;
@@ -71,9 +84,11 @@ pub fn compile(program: &Program, options: &Options) -> Result<()> {
 
 struct Compiler {
     stack: Vec<Value>,
+    pointer_type: Type,
     object_module: ObjectModule,
     extern_functions: HashMap<&'static str, FuncId>,
     extern_function_signatures: HashMap<&'static str, Signature>,
+    strings: HashMap<&'static str, DataId>,
 }
 
 impl Compiler {
@@ -101,6 +116,21 @@ impl Compiler {
         fb.ins().call(func_ref, args)
     }
 
+    fn allocate_str(
+        &mut self,
+        s: &'static str,
+        fb: &mut FunctionBuilder,
+    ) -> Value {
+        let data_id = *self.strings.entry(s).or_insert_with(|| {
+            self.object_module
+                .declare_anonymous_data(false, false)
+                .unwrap()
+        });
+        let global_value =
+            self.object_module.declare_data_in_func(data_id, fb.func);
+        fb.ins().global_value(self.pointer_type, global_value)
+    }
+
     fn compile(
         &mut self,
         program: &Program,
@@ -123,7 +153,11 @@ impl Compiler {
             Instruction::Push(number) => {
                 self.stack.push(fb.ins().iconst(I32, i64::from(number)));
             }
-            Instruction::Println => todo!(),
+            Instruction::Println => {
+                let n = self.pop()?;
+                let fmt = self.allocate_str("%d\n\0", fb);
+                self.call_extern("printf", &[fmt, n], fb);
+            }
             Instruction::PrintChar => {
                 let n = self.pop()?;
 
@@ -185,14 +219,27 @@ impl Compiler {
 }
 
 fn extern_function_signatures(
-    call_conv: CallConv,
+    isa: &dyn TargetIsa,
 ) -> HashMap<&'static str, Signature> {
-    HashMap::from([(
-        "putchar",
-        Signature {
-            params: vec![AbiParam::new(I32)],
-            returns: vec![AbiParam::new(I32)],
-            call_conv,
-        },
-    )])
+    let call_conv = isa.default_call_conv();
+    let pointer = isa.pointer_type();
+
+    HashMap::from([
+        (
+            "putchar",
+            Signature {
+                params: vec![AbiParam::new(I32)],
+                returns: vec![AbiParam::new(I32)],
+                call_conv,
+            },
+        ),
+        (
+            "printf",
+            Signature {
+                params: vec![AbiParam::new(pointer), AbiParam::new(I32)],
+                returns: vec![AbiParam::new(I32)],
+                call_conv,
+            },
+        ),
+    ])
 }
