@@ -7,8 +7,8 @@ use cranelift::{
     },
     prelude::{
         isa::TargetIsa, settings, types::I32, AbiParam, Configurable,
-        FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC, Signature,
-        TrapCode, Type, Value,
+        FunctionBuilder, FunctionBuilderContext, InstBuilder, Signature, Type,
+        Value,
     },
 };
 use cranelift_module::{DataContext, DataId, FuncId, Linkage, Module};
@@ -160,13 +160,7 @@ impl Compiler {
             }
             Instruction::PrintChar => {
                 let n = self.pop()?;
-
-                // TODO: Support non-ASCII characters
-                let is_ascii =
-                    fb.ins().icmp_imm(IntCC::UnsignedLessThan, n, 0x80);
-                fb.ins().trapz(is_ascii, TrapCode::User(0));
-
-                self.call_extern("putchar", &[n], fb);
+                self.call_extern("spkl_print_char", &[n], fb);
             }
             Instruction::Add => {
                 // FIXME: This does not implement the interpreter's quirks.
@@ -226,10 +220,10 @@ fn extern_function_signatures(
 
     HashMap::from([
         (
-            "putchar",
+            "spkl_print_char",
             Signature {
                 params: vec![AbiParam::new(I32)],
-                returns: vec![AbiParam::new(I32)],
+                returns: Vec::new(),
                 call_conv,
             },
         ),
