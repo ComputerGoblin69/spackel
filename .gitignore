@@ -1,2 +1,4 @@
 /target
 /*.spkl
+*.o
+main
