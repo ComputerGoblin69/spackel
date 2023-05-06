@@ -97,6 +97,13 @@ impl Interpreter {
                 self.pop()?;
                 self.stack.push(b);
             }
+            Instruction::Tuck => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                self.stack.push(b);
+                self.stack.push(a);
+                self.stack.push(b);
+            }
         }
         Ok(())
     }
