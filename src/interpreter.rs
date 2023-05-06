@@ -66,6 +66,11 @@ impl Interpreter {
                 let b = self.pop()?;
                 self.push(b / a);
             }
+            Instruction::Rem => {
+                let a = self.pop()?;
+                let b = self.pop()?;
+                self.push(b % a);
+            }
             Instruction::SharpS => self.push(1945),
             Instruction::Pop => {
                 self.pop()?;

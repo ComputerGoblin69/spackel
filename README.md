@@ -55,6 +55,8 @@ For now, there is only one data type: `i32`, the signed 32-bit integer.
   - $9+10 = 21$
   - $10+9 = 21$
   - $1+1 = 1$
+- `%`: computes the remainder of the top two elements. Note that this is *not*
+  the same as modulo when negative numbers are involved.
 
 ### Stack manipulation
 

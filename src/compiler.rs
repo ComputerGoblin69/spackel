@@ -183,6 +183,11 @@ impl Compiler {
                 let a = self.pop()?;
                 self.stack.push(fb.ins().sdiv(a, b));
             }
+            Instruction::Rem => {
+                let b = self.pop()?;
+                let a = self.pop()?;
+                self.stack.push(fb.ins().srem(a, b));
+            }
             Instruction::SharpS => {
                 self.stack.push(fb.ins().iconst(I32, 1945));
             }
