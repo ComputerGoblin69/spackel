@@ -147,7 +147,7 @@ impl Compiler {
         program: &Program,
         fb: &mut FunctionBuilder,
     ) -> Result<()> {
-        for instruction in &program.instructions {
+        for &instruction in &program.instructions {
             self.compile_instruction(instruction, fb)?;
         }
         let exit_code = fb.ins().iconst(I32, 0);
@@ -157,10 +157,10 @@ impl Compiler {
 
     fn compile_instruction(
         &mut self,
-        instruction: &Instruction,
+        instruction: Instruction,
         fb: &mut FunctionBuilder,
     ) -> Result<()> {
-        match *instruction {
+        match instruction {
             Instruction::Push(number) => {
                 self.stack.push(fb.ins().iconst(I32, i64::from(number)));
             }

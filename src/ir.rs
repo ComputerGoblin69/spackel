@@ -20,6 +20,7 @@ impl Program {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum Instruction {
     Push(i32),
     Println,

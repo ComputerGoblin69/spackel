@@ -28,7 +28,7 @@ impl Stack for Interpreter {
 
 impl Interpreter {
     fn interpret(&mut self, program: &Program) -> Result<()> {
-        for instruction in &program.instructions {
+        for &instruction in &program.instructions {
             self.interpret_instruction(instruction)?;
         }
         ensure!(self.stack.is_empty(), "there's stuff left on the self");
@@ -37,9 +37,9 @@ impl Interpreter {
 
     fn interpret_instruction(
         &mut self,
-        instruction: &Instruction,
+        instruction: Instruction,
     ) -> Result<(), anyhow::Error> {
-        match *instruction {
+        match instruction {
             Instruction::Push(number) => self.push(number),
             Instruction::Println => println!("{}", self.pop()?),
             #[allow(clippy::cast_sign_loss)]
