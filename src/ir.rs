@@ -33,6 +33,7 @@ pub enum Instruction {
     Dup,
     Swap,
     Over,
+    Nip,
 }
 
 impl Instruction {
@@ -50,6 +51,7 @@ impl Instruction {
             "dup" => Self::Dup,
             "swap" => Self::Swap,
             "over" => Self::Over,
+            "nip" => Self::Nip,
             _ => {
                 Self::Push(word.parse().ok().with_context(|| {
                     format!("unknown instruction: `{word}`")

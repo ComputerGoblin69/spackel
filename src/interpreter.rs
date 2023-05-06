@@ -92,6 +92,11 @@ impl Interpreter {
                 self.push(b);
                 self.push(a);
             }
+            Instruction::Nip => {
+                let b = self.pop()?;
+                self.pop()?;
+                self.stack.push(b);
+            }
         }
         Ok(())
     }

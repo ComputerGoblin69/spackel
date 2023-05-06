@@ -65,6 +65,7 @@ For now, there is only one data type: `i32`, the signed 32-bit integer.
 - `swap`: swaps the top two elements.
 - `over`: duplicates the second element onto the top of the stack, turning `a b`
   into `a b a`.
+- `nip`: pops the second element.
 
 ### IO
 

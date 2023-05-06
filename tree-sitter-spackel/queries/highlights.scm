@@ -4,7 +4,7 @@
 
 (
  (word) @function.builtin
- (#match? @function.builtin "^(println|print-char|\\+|-|\\*|/|%|ß|drop|dup|swap|over)$")
+ (#match? @function.builtin "^(println|print-char|\\+|-|\\*|/|%|ß|drop|dup|swap|over|nip)$")
 )
 
 (word) @variable

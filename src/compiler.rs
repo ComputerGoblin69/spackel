@@ -209,6 +209,11 @@ impl Compiler {
                 self.stack.push(b);
                 self.stack.push(a);
             }
+            Instruction::Nip => {
+                let b = self.pop()?;
+                self.pop()?;
+                self.stack.push(b);
+            }
         }
         Ok(())
     }
