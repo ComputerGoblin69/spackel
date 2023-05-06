@@ -1,6 +1,9 @@
 #![forbid(clippy::unwrap_used)]
 
-use crate::ir::{Instruction, Program};
+use crate::{
+    ir::{Instruction, Program},
+    stack::Stack,
+};
 use anyhow::{ensure, Context, Result};
 
 pub fn interpret(program: &Program) -> Result<()> {
@@ -11,15 +14,19 @@ struct Interpreter {
     stack: Vec<i32>,
 }
 
-impl Interpreter {
-    fn pop(&mut self) -> Result<i32> {
+impl Stack for Interpreter {
+    type Item = i32;
+
+    fn push(&mut self, element: Self::Item) {
+        self.stack.push(element);
+    }
+
+    fn pop(&mut self) -> Result<Self::Item> {
         self.stack.pop().context("not enough arguments on stack")
     }
+}
 
-    fn push(&mut self, value: i32) {
-        self.stack.push(value);
-    }
-
+impl Interpreter {
     fn interpret(&mut self, program: &Program) -> Result<()> {
         for instruction in &program.instructions {
             self.interpret_instruction(instruction)?;
@@ -74,36 +81,11 @@ impl Interpreter {
             Instruction::Drop => {
                 self.pop()?;
             }
-            Instruction::Dup => {
-                let v = self.pop()?;
-                self.push(v);
-                self.push(v);
-            }
-            Instruction::Swap => {
-                let b = self.pop()?;
-                let a = self.pop()?;
-                self.push(b);
-                self.push(a);
-            }
-            Instruction::Over => {
-                let b = self.pop()?;
-                let a = self.pop()?;
-                self.push(a);
-                self.push(b);
-                self.push(a);
-            }
-            Instruction::Nip => {
-                let b = self.pop()?;
-                self.pop()?;
-                self.stack.push(b);
-            }
-            Instruction::Tuck => {
-                let b = self.pop()?;
-                let a = self.pop()?;
-                self.stack.push(b);
-                self.stack.push(a);
-                self.stack.push(b);
-            }
+            Instruction::Dup => self.dup()?,
+            Instruction::Swap => self.swap()?,
+            Instruction::Over => self.over()?,
+            Instruction::Nip => self.nip()?,
+            Instruction::Tuck => self.tuck()?,
         }
         Ok(())
     }

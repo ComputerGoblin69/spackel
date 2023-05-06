@@ -4,6 +4,7 @@
 mod compiler;
 mod interpreter;
 mod ir;
+mod stack;
 
 use anyhow::{bail, ensure, Context, Result};
 use std::path::Path;

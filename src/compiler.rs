@@ -1,4 +1,7 @@
-use crate::ir::{Instruction, Program};
+use crate::{
+    ir::{Instruction, Program},
+    stack::Stack,
+};
 use anyhow::{Context as _, Result};
 use cranelift::{
     codegen::{
@@ -91,11 +94,19 @@ struct Compiler {
     strings: HashMap<&'static str, DataId>,
 }
 
-impl Compiler {
-    fn pop(&mut self) -> Result<Value> {
-        self.stack.pop().context("not enough arguments on stack")
+impl Stack for Compiler {
+    type Item = Value;
+
+    fn push(&mut self, element: Self::Item) {
+        self.stack.push(element);
     }
 
+    fn pop(&mut self) -> Result<Self::Item> {
+        self.stack.pop().context("not enough arguments on stack")
+    }
+}
+
+impl Compiler {
     fn call_extern(
         &mut self,
         func_name: &'static str,
@@ -166,61 +177,36 @@ impl Compiler {
                 // FIXME: This does not implement the interpreter's quirks.
                 let b = self.pop()?;
                 let a = self.pop()?;
-                self.stack.push(fb.ins().iadd(a, b));
+                self.push(fb.ins().iadd(a, b));
             }
             Instruction::Sub => {
                 let b = self.pop()?;
                 let a = self.pop()?;
-                self.stack.push(fb.ins().isub(a, b));
+                self.push(fb.ins().isub(a, b));
             }
             Instruction::Mul => {
                 let b = self.pop()?;
                 let a = self.pop()?;
-                self.stack.push(fb.ins().imul(a, b));
+                self.push(fb.ins().imul(a, b));
             }
             Instruction::Div => {
                 let b = self.pop()?;
                 let a = self.pop()?;
-                self.stack.push(fb.ins().sdiv(a, b));
+                self.push(fb.ins().sdiv(a, b));
             }
             Instruction::Rem => {
                 let b = self.pop()?;
                 let a = self.pop()?;
-                self.stack.push(fb.ins().srem(a, b));
+                self.push(fb.ins().srem(a, b));
             }
             Instruction::Drop => {
                 self.pop()?;
             }
-            Instruction::Dup => {
-                let v = self.pop()?;
-                self.stack.push(v);
-                self.stack.push(v);
-            }
-            Instruction::Swap => {
-                let b = self.pop()?;
-                let a = self.pop()?;
-                self.stack.push(b);
-                self.stack.push(a);
-            }
-            Instruction::Over => {
-                let b = self.pop()?;
-                let a = self.pop()?;
-                self.stack.push(a);
-                self.stack.push(b);
-                self.stack.push(a);
-            }
-            Instruction::Nip => {
-                let b = self.pop()?;
-                self.pop()?;
-                self.stack.push(b);
-            }
-            Instruction::Tuck => {
-                let b = self.pop()?;
-                let a = self.pop()?;
-                self.stack.push(b);
-                self.stack.push(a);
-                self.stack.push(b);
-            }
+            Instruction::Dup => self.dup()?,
+            Instruction::Swap => self.swap()?,
+            Instruction::Over => self.over()?,
+            Instruction::Nip => self.nip()?,
+            Instruction::Tuck => self.tuck()?,
         }
         Ok(())
     }
