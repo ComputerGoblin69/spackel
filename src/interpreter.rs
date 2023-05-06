@@ -71,7 +71,7 @@ impl Interpreter {
                 let b = self.pop()?;
                 self.push(b % a);
             }
-            Instruction::Pop => {
+            Instruction::Drop => {
                 self.pop()?;
             }
             Instruction::Dup => {

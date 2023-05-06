@@ -60,7 +60,7 @@ For now, there is only one data type: `i32`, the signed 32-bit integer.
 
 ### Stack manipulation
 
-- `pop`: pops one element.
+- `drop`: pops one element.
 - `dup`: duplicates the top element.
 - `swap`: swaps the top two elements.
 - `over`: duplicates the second element onto the top of the stack, turning `a b`

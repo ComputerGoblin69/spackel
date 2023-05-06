@@ -188,7 +188,7 @@ impl Compiler {
                 let a = self.pop()?;
                 self.stack.push(fb.ins().srem(a, b));
             }
-            Instruction::Pop => {
+            Instruction::Drop => {
                 self.pop()?;
             }
             Instruction::Dup => {
