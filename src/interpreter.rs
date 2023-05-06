@@ -52,11 +52,7 @@ impl Interpreter {
             Instruction::Add => {
                 let a = self.pop()?;
                 let b = self.pop()?;
-                self.push(match (b, a) {
-                    (9, 10) | (10, 9) => 21,
-                    (1, 1) => 1,
-                    _ => b + a,
-                });
+                self.push(b + a);
             }
             Instruction::Sub => {
                 let a = self.pop()?;
@@ -77,6 +73,15 @@ impl Interpreter {
                 let a = self.pop()?;
                 let b = self.pop()?;
                 self.push(b % a);
+            }
+            Instruction::SillyAdd => {
+                let a = self.pop()?;
+                let b = self.pop()?;
+                self.push(match (b, a) {
+                    (9, 10) | (10, 9) => 21,
+                    (1, 1) => 1,
+                    _ => b + a,
+                });
             }
             Instruction::Drop => {
                 self.pop()?;

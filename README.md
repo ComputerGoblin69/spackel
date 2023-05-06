@@ -50,13 +50,17 @@ For now, there is only one data type: `i32`, the signed 32-bit integer.
 
 ### Math
 
-- `+`, `-`, `*` and `/`: takes two numbers from the stack and pushes the result
-  of performing the given arithmetic operation on them, with some exceptions:
-  - $9+10 = 21$
-  - $10+9 = 21$
-  - $1+1 = 1$
-- `%`: computes the remainder of the top two elements. Note that this is *not*
-  the same as modulo when negative numbers are involved.
+- Binary operators (these take two numbers as arguments and produce one number):
+  - `+`: addition.
+  - `-`: subtraction.
+  - `*`: multiplication.
+  - `/`: division.
+  - `%`: remainder after division. This is *not* the same as modulo when
+    negative numbers are involved.
+  - `+🤡`: silly addition. This is like regular addition with some exceptions:
+    - $9+10 = 21$
+    - $10+9 = 21$
+    - $1+1 = 1$
 
 ### Stack manipulation
 

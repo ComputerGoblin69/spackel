@@ -174,7 +174,6 @@ impl Compiler {
                 self.call_extern("spkl_print_char", &[n], fb);
             }
             Instruction::Add => {
-                // FIXME: This does not implement the interpreter's quirks.
                 let b = self.pop()?;
                 let a = self.pop()?;
                 self.push(fb.ins().iadd(a, b));
@@ -199,6 +198,7 @@ impl Compiler {
                 let a = self.pop()?;
                 self.push(fb.ins().srem(a, b));
             }
+            Instruction::SillyAdd => todo!(),
             Instruction::Drop => {
                 self.pop()?;
             }
