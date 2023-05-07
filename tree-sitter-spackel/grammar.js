@@ -3,8 +3,15 @@ module.exports = grammar({
 
   extras: $ => [/\s/, $.line_comment],
 
+  word: $ => $.word,
+
   rules: {
-    source_file: $ => repeat(choice($.number, $.word)),
+    source_file: $ => repeat(choice($.macro_definition, $._instruction)),
+
+    macro_definition: $ =>
+      seq("macro", field("name", $.word), repeat($._instruction), "end"),
+
+    _instruction: $ => choice($.number, $.word),
 
     number: $ => /[+-]?\d+/,
 
