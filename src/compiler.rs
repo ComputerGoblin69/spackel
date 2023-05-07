@@ -2,7 +2,7 @@ use crate::{
     ir::{BinMathOp, Instruction, Program},
     stack::Stack,
 };
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use cranelift::{
     codegen::{
         ir::{Function, Inst, UserFuncName},
@@ -16,7 +16,9 @@ use cranelift::{
 };
 use cranelift_module::{DataContext, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
-use std::{collections::HashMap, fs::File, io::Write, path::Path};
+use std::{
+    collections::HashMap, convert::Infallible, fs::File, io::Write, path::Path,
+};
 
 pub struct Options<'a> {
     pub target_triple: &'a str,
@@ -96,13 +98,14 @@ struct Compiler {
 
 impl Stack for Compiler {
     type Item = Value;
+    type Error = Infallible;
 
     fn push(&mut self, element: Self::Item) {
         self.stack.push(element);
     }
 
-    fn pop(&mut self) -> Result<Self::Item> {
-        self.stack.pop().context("not enough arguments on stack")
+    fn pop(&mut self) -> Result<Self::Item, Infallible> {
+        Ok(self.stack.pop().unwrap())
     }
 }
 

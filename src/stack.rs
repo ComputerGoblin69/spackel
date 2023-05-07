@@ -1,20 +1,19 @@
-use anyhow::Result;
-
 pub trait Stack {
     type Item: Copy;
+    type Error;
 
     fn push(&mut self, element: Self::Item);
 
-    fn pop(&mut self) -> Result<Self::Item>;
+    fn pop(&mut self) -> Result<Self::Item, Self::Error>;
 
-    fn dup(&mut self) -> Result<()> {
+    fn dup(&mut self) -> Result<(), Self::Error> {
         let v = self.pop()?;
         self.push(v);
         self.push(v);
         Ok(())
     }
 
-    fn swap(&mut self) -> Result<()> {
+    fn swap(&mut self) -> Result<(), Self::Error> {
         let b = self.pop()?;
         let a = self.pop()?;
         self.push(b);
@@ -22,7 +21,7 @@ pub trait Stack {
         Ok(())
     }
 
-    fn over(&mut self) -> Result<()> {
+    fn over(&mut self) -> Result<(), Self::Error> {
         let b = self.pop()?;
         let a = self.pop()?;
         self.push(a);
@@ -31,14 +30,14 @@ pub trait Stack {
         Ok(())
     }
 
-    fn nip(&mut self) -> Result<()> {
+    fn nip(&mut self) -> Result<(), Self::Error> {
         let b = self.pop()?;
         self.pop()?;
         self.push(b);
         Ok(())
     }
 
-    fn tuck(&mut self) -> Result<()> {
+    fn tuck(&mut self) -> Result<(), Self::Error> {
         let b = self.pop()?;
         let a = self.pop()?;
         self.push(b);

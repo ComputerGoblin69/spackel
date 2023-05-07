@@ -1,10 +1,9 @@
-#![forbid(clippy::unwrap_used)]
-
 use crate::{
     ir::{BinMathOp, Instruction, Program},
     stack::Stack,
 };
-use anyhow::{ensure, Context, Result};
+use anyhow::Result;
+use std::convert::Infallible;
 
 pub fn interpret(program: &Program) -> Result<()> {
     Interpreter { stack: Vec::new() }.interpret(program)
@@ -16,13 +15,14 @@ struct Interpreter {
 
 impl Stack for Interpreter {
     type Item = i32;
+    type Error = Infallible;
 
     fn push(&mut self, element: Self::Item) {
         self.stack.push(element);
     }
 
-    fn pop(&mut self) -> Result<Self::Item> {
-        self.stack.pop().context("not enough arguments on stack")
+    fn pop(&mut self) -> Result<Self::Item, Infallible> {
+        Ok(self.stack.pop().unwrap())
     }
 }
 
@@ -31,14 +31,13 @@ impl Interpreter {
         for &instruction in &program.instructions {
             self.interpret_instruction(instruction)?;
         }
-        ensure!(self.stack.is_empty(), "there's stuff left on the self");
         Ok(())
     }
 
     fn interpret_instruction(
         &mut self,
         instruction: Instruction,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<()> {
         match instruction {
             Instruction::Push(number) => self.push(number),
             Instruction::Println => println!("{}", self.pop()?),

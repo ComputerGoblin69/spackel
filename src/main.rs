@@ -5,6 +5,7 @@ mod compiler;
 mod interpreter;
 mod ir;
 mod stack;
+mod typ;
 
 use anyhow::{bail, ensure, Context, Result};
 use std::path::Path;
@@ -30,6 +31,7 @@ fn main() -> Result<()> {
         .context("failed to read source file")?;
 
     let program = ir::Program::parse(&source_code)?;
+    typ::check(&program)?;
 
     match command {
         Command::Run => interpreter::interpret(&program),
