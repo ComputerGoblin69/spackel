@@ -25,12 +25,7 @@ pub enum Instruction {
     Push(i32),
     Println,
     PrintChar,
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Rem,
-    SillyAdd,
+    BinMathOp(BinMathOp),
     Drop,
     Dup,
     Swap,
@@ -44,12 +39,12 @@ impl Instruction {
         Ok(match word {
             "println" => Self::Println,
             "print-char" => Self::PrintChar,
-            "+" => Self::Add,
-            "-" => Self::Sub,
-            "*" => Self::Mul,
-            "/" => Self::Div,
-            "+🤡" => Self::SillyAdd,
-            "%" => Self::Rem,
+            "+" => Self::BinMathOp(BinMathOp::Add),
+            "-" => Self::BinMathOp(BinMathOp::Sub),
+            "*" => Self::BinMathOp(BinMathOp::Mul),
+            "/" => Self::BinMathOp(BinMathOp::Div),
+            "%" => Self::BinMathOp(BinMathOp::Rem),
+            "+🤡" => Self::BinMathOp(BinMathOp::SillyAdd),
             "ß" => Self::Push(1945),
             "drop" => Self::Drop,
             "dup" => Self::Dup,
@@ -64,4 +59,14 @@ impl Instruction {
             }
         })
     }
+}
+
+#[derive(Clone, Copy)]
+pub enum BinMathOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    SillyAdd,
 }

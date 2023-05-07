@@ -1,5 +1,5 @@
 use crate::{
-    ir::{Instruction, Program},
+    ir::{BinMathOp, Instruction, Program},
     stack::Stack,
 };
 use anyhow::{Context as _, Result};
@@ -173,32 +173,18 @@ impl Compiler {
                 let n = self.pop()?;
                 self.call_extern("spkl_print_char", &[n], fb);
             }
-            Instruction::Add => {
+            Instruction::BinMathOp(op) => {
                 let b = self.pop()?;
                 let a = self.pop()?;
-                self.push(fb.ins().iadd(a, b));
+                self.push(match op {
+                    BinMathOp::Add => fb.ins().iadd(a, b),
+                    BinMathOp::Sub => fb.ins().isub(a, b),
+                    BinMathOp::Mul => fb.ins().imul(a, b),
+                    BinMathOp::Div => fb.ins().sdiv(a, b),
+                    BinMathOp::Rem => fb.ins().srem(a, b),
+                    BinMathOp::SillyAdd => todo!(),
+                });
             }
-            Instruction::Sub => {
-                let b = self.pop()?;
-                let a = self.pop()?;
-                self.push(fb.ins().isub(a, b));
-            }
-            Instruction::Mul => {
-                let b = self.pop()?;
-                let a = self.pop()?;
-                self.push(fb.ins().imul(a, b));
-            }
-            Instruction::Div => {
-                let b = self.pop()?;
-                let a = self.pop()?;
-                self.push(fb.ins().sdiv(a, b));
-            }
-            Instruction::Rem => {
-                let b = self.pop()?;
-                let a = self.pop()?;
-                self.push(fb.ins().srem(a, b));
-            }
-            Instruction::SillyAdd => todo!(),
             Instruction::Drop => {
                 self.pop()?;
             }

@@ -1,7 +1,7 @@
 #![forbid(clippy::unwrap_used)]
 
 use crate::{
-    ir::{Instruction, Program},
+    ir::{BinMathOp, Instruction, Program},
     stack::Stack,
 };
 use anyhow::{ensure, Context, Result};
@@ -49,38 +49,20 @@ impl Interpreter {
                     .try_into()
                     .unwrap_or(char::REPLACEMENT_CHARACTER)
             ),
-            Instruction::Add => {
-                let a = self.pop()?;
+            Instruction::BinMathOp(op) => {
                 let b = self.pop()?;
-                self.push(b + a);
-            }
-            Instruction::Sub => {
                 let a = self.pop()?;
-                let b = self.pop()?;
-                self.push(b - a);
-            }
-            Instruction::Mul => {
-                let a = self.pop()?;
-                let b = self.pop()?;
-                self.push(b * a);
-            }
-            Instruction::Div => {
-                let a = self.pop()?;
-                let b = self.pop()?;
-                self.push(b / a);
-            }
-            Instruction::Rem => {
-                let a = self.pop()?;
-                let b = self.pop()?;
-                self.push(b % a);
-            }
-            Instruction::SillyAdd => {
-                let a = self.pop()?;
-                let b = self.pop()?;
-                self.push(match (b, a) {
-                    (9, 10) | (10, 9) => 21,
-                    (1, 1) => 1,
-                    _ => b + a,
+                self.push(match op {
+                    BinMathOp::Add => a + b,
+                    BinMathOp::Sub => a - b,
+                    BinMathOp::Mul => a * b,
+                    BinMathOp::Div => a / b,
+                    BinMathOp::Rem => a % b,
+                    BinMathOp::SillyAdd => match (a, b) {
+                        (9, 10) | (10, 9) => 21,
+                        (1, 1) => 1,
+                        _ => a + b,
+                    },
                 });
             }
             Instruction::Drop => {
