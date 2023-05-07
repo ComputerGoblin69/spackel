@@ -3,10 +3,20 @@ use crate::{
     stack::Stack,
 };
 use anyhow::{ensure, Context, Result};
+use itertools::Itertools;
+use std::fmt;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Type {
     I32,
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::I32 => "i32",
+        })
+    }
 }
 
 pub fn check(program: &Program) -> Result<()> {
@@ -35,13 +45,21 @@ impl Checker {
         for &instruction in &program.instructions {
             self.check_instruction(instruction)?;
         }
-        ensure!(self.stack.is_empty(), "there's stuff left on the stack");
+        ensure!(
+            self.stack.is_empty(),
+            "there are values left on the stack with the following types: `{}`",
+            self.stack.iter().format(" ")
+        );
         Ok(())
     }
 
     fn take(&mut self, types: &[Type]) -> Result<()> {
-        // TODO: Improve error message
-        ensure!(self.stack.ends_with(types), "type error");
+        ensure!(
+            self.stack.ends_with(types),
+            "expected types `{}` but got `{}`",
+            types.iter().format(" "),
+            self.stack.iter().format(" ")
+        );
         let new_len = self.stack.len() - types.len();
         self.stack.truncate(new_len);
         Ok(())
