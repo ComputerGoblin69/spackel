@@ -1,8 +1,5 @@
-use crate::{
-    ir::{Instruction, Program},
-    stack::Stack,
-};
-use anyhow::{ensure, Context, Result};
+use crate::ir::{Instruction, Program};
+use anyhow::{ensure, Result};
 use itertools::Itertools;
 use std::fmt;
 
@@ -25,19 +22,6 @@ pub fn check(program: &Program) -> Result<()> {
 
 struct Checker {
     stack: Vec<Type>,
-}
-
-impl Stack for Checker {
-    type Item = Type;
-    type Error = anyhow::Error;
-
-    fn push(&mut self, element: Self::Item) {
-        self.stack.push(element);
-    }
-
-    fn pop(&mut self) -> Result<Self::Item> {
-        self.stack.pop().context("not enough arguments on stack")
-    }
 }
 
 impl Checker {
@@ -65,23 +49,30 @@ impl Checker {
         Ok(())
     }
 
+    fn transform(&mut self, inputs: &[Type], outputs: &[Type]) -> Result<()> {
+        self.take(inputs)?;
+        self.stack.extend(outputs);
+        Ok(())
+    }
+
     fn check_instruction(&mut self, instruction: Instruction) -> Result<()> {
         use Type::I32;
         match instruction {
-            Instruction::Push(_) => self.stack.push(I32),
-            Instruction::BinMathOp(_) => {
-                self.take(&[I32; 2])?;
+            Instruction::Push(_) => {
                 self.stack.push(I32);
+                Ok(())
+            }
+            Instruction::BinMathOp(_) | Instruction::Nip => {
+                self.transform(&[I32; 2], &[I32])
             }
             Instruction::Println
             | Instruction::PrintChar
-            | Instruction::Drop => self.take(&[I32])?,
-            Instruction::Dup => self.dup()?,
-            Instruction::Swap => self.swap()?,
-            Instruction::Over => self.over()?,
-            Instruction::Nip => self.nip()?,
-            Instruction::Tuck => self.tuck()?,
+            | Instruction::Drop => self.take(&[I32]),
+            Instruction::Dup => self.transform(&[I32], &[I32; 2]),
+            Instruction::Swap => self.transform(&[I32; 2], &[I32; 2]),
+            Instruction::Over | Instruction::Tuck => {
+                self.transform(&[I32; 2], &[I32; 3])
+            }
         }
-        Ok(())
     }
 }
