@@ -16,9 +16,7 @@ use cranelift::{
 };
 use cranelift_module::{DataContext, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
-use std::{
-    collections::HashMap, convert::Infallible, fs::File, io::Write, path::Path,
-};
+use std::{collections::HashMap, fs::File, io::Write, path::Path};
 
 pub struct Options<'a> {
     pub target_triple: &'a str,
@@ -64,7 +62,7 @@ pub fn compile(program: &Program, options: &Options) -> Result<()> {
         extern_function_signatures,
         strings: HashMap::new(),
     };
-    compiler.compile(program, &mut fb)?;
+    compiler.compile(program, &mut fb);
     fb.finalize();
 
     compiler
@@ -98,14 +96,13 @@ struct Compiler {
 
 impl Stack for Compiler {
     type Item = Value;
-    type Error = Infallible;
 
     fn push(&mut self, element: Self::Item) {
         self.stack.push(element);
     }
 
-    fn pop(&mut self) -> Result<Self::Item, Infallible> {
-        Ok(self.stack.pop().unwrap())
+    fn pop(&mut self) -> Self::Item {
+        self.stack.pop().unwrap()
     }
 }
 
@@ -145,40 +142,35 @@ impl Compiler {
         fb.ins().global_value(self.pointer_type, global_value)
     }
 
-    fn compile(
-        &mut self,
-        program: &Program,
-        fb: &mut FunctionBuilder,
-    ) -> Result<()> {
+    fn compile(&mut self, program: &Program, fb: &mut FunctionBuilder) {
         for &instruction in &program.instructions {
-            self.compile_instruction(instruction, fb)?;
+            self.compile_instruction(instruction, fb);
         }
         let exit_code = fb.ins().iconst(I32, 0);
         fb.ins().return_(&[exit_code]);
-        Ok(())
     }
 
     fn compile_instruction(
         &mut self,
         instruction: Instruction,
         fb: &mut FunctionBuilder,
-    ) -> Result<()> {
+    ) {
         match instruction {
             Instruction::Push(number) => {
                 self.stack.push(fb.ins().iconst(I32, i64::from(number)));
             }
             Instruction::Println => {
-                let n = self.pop()?;
+                let n = self.pop();
                 let fmt = self.allocate_str("%d\n\0", fb);
                 self.call_extern("printf", &[fmt, n], fb);
             }
             Instruction::PrintChar => {
-                let n = self.pop()?;
+                let n = self.pop();
                 self.call_extern("spkl_print_char", &[n], fb);
             }
             Instruction::BinMathOp(op) => {
-                let b = self.pop()?;
-                let a = self.pop()?;
+                let b = self.pop();
+                let a = self.pop();
                 self.push(match op {
                     BinMathOp::Add => fb.ins().iadd(a, b),
                     BinMathOp::Sub => fb.ins().isub(a, b),
@@ -189,15 +181,14 @@ impl Compiler {
                 });
             }
             Instruction::Drop => {
-                self.pop()?;
+                self.pop();
             }
-            Instruction::Dup => self.dup()?,
-            Instruction::Swap => self.swap()?,
-            Instruction::Over => self.over()?,
-            Instruction::Nip => self.nip()?,
-            Instruction::Tuck => self.tuck()?,
+            Instruction::Dup => self.dup(),
+            Instruction::Swap => self.swap(),
+            Instruction::Over => self.over(),
+            Instruction::Nip => self.nip(),
+            Instruction::Tuck => self.tuck(),
         }
-        Ok(())
     }
 }
 

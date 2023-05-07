@@ -34,7 +34,10 @@ fn main() -> Result<()> {
     typ::check(&program)?;
 
     match command {
-        Command::Run => interpreter::interpret(&program),
+        Command::Run => {
+            interpreter::interpret(&program);
+            Ok(())
+        }
         Command::Compile => {
             let compilation_options = compiler::Options {
                 target_triple: "x86_64-unknown-linux-gnu",
