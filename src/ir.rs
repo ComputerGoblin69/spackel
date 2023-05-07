@@ -1,4 +1,5 @@
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
+use std::collections::HashMap;
 
 pub struct Program {
     pub instructions: Vec<Instruction>,
@@ -6,16 +7,51 @@ pub struct Program {
 
 impl Program {
     pub fn parse(source_code: &str) -> Result<Self> {
+        let mut tokens = source_code
+            .lines()
+            .flat_map(|line| {
+                line.split_once('#')
+                    .map_or(line, |(line, _comment)| line)
+                    .split_whitespace()
+            })
+            .peekable();
+
+        let mut macros = HashMap::<&str, Vec<Instruction>>::new();
+
         Ok(Self {
-            instructions: source_code
-                .lines()
-                .flat_map(|line| {
-                    line.split_once('#')
-                        .map_or(line, |(line, _comment)| line)
-                        .split_whitespace()
+            instructions: crate::iter::try_from_fn(|| {
+                ensure!(
+                    tokens.peek().copied() != Some("end"),
+                    "unexpected `end`"
+                );
+
+                Ok(if tokens.next_if_eq(&"macro").is_some() {
+                    let name = tokens
+                        .next()
+                        .filter(|&name| !matches!(name, "macro" | "end"))
+                        .context("macro definition has no name")?;
+                    let body = tokens
+                        .by_ref()
+                        .take_while(|&token| token != "end")
+                        .map(|token| {
+                            ensure!(
+                                token != "macro",
+                                "nested macros are not supported"
+                            );
+                            Instruction::parse(token)
+                        })
+                        .collect::<Result<_>>()?;
+                    ensure!(
+                        macros.insert(name, body).is_none(),
+                        "redefinition of macro `{name}`"
+                    );
+                    Some(None)
+                } else {
+                    tokens.next().map(Instruction::parse).transpose()?.map(Some)
                 })
-                .map(Instruction::parse)
-                .collect::<Result<_>>()?,
+            })
+            .filter_map(Result::transpose)
+            .collect::<Result<_>>()?,
         })
     }
 }
