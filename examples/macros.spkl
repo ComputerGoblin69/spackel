@@ -1,0 +1,7 @@
+macro double
+  2 *
+end
+
+1 double println
+5 double double println
+-99 double println

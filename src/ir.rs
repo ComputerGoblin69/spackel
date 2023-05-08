@@ -7,25 +7,23 @@ pub struct Program {
 
 impl Program {
     pub fn parse(source_code: &str) -> Result<Self> {
-        let mut tokens = source_code
-            .lines()
-            .flat_map(|line| {
-                line.split_once('#')
-                    .map_or(line, |(line, _comment)| line)
-                    .split_whitespace()
-            })
-            .peekable();
+        let mut tokens = source_code.lines().flat_map(|line| {
+            line.split_once('#')
+                .map_or(line, |(line, _comment)| line)
+                .split_whitespace()
+        });
 
         let mut macros = HashMap::<&str, Vec<Instruction>>::new();
 
         Ok(Self {
             instructions: crate::iter::try_from_fn(|| {
-                ensure!(
-                    tokens.peek().copied() != Some("end"),
-                    "unexpected `end`"
-                );
+                let Some(token) = tokens.next() else {
+                    return Ok(None);
+                };
 
-                Ok(if tokens.next_if_eq(&"macro").is_some() {
+                ensure!(token != "end", "unexpected `end`");
+
+                Ok(Some(if token == "macro" {
                     let name = tokens
                         .next()
                         .filter(|&name| !matches!(name, "macro" | "end"))
@@ -45,10 +43,10 @@ impl Program {
                         macros.insert(name, body).is_none(),
                         "redefinition of macro `{name}`"
                     );
-                    Some(None)
+                    None
                 } else {
-                    tokens.next().map(Instruction::parse).transpose()?.map(Some)
-                })
+                    Some(Instruction::parse(token)?)
+                }))
             })
             .filter_map(Result::transpose)
             .collect::<Result<_>>()?,
