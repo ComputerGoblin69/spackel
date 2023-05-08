@@ -5,3 +5,10 @@ end
 1 double println
 5 double double println
 -99 double println
+
+macro quadruple
+  double double
+end
+
+10 quadruple println
+10 quadruple double println

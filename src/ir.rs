@@ -1,4 +1,5 @@
 use anyhow::{ensure, Context, Result};
+use itertools::Itertools;
 use std::collections::HashMap;
 
 pub struct Program {
@@ -36,19 +37,26 @@ impl Program {
                                 token != "macro",
                                 "nested macros are not supported"
                             );
-                            Instruction::parse(token)
+                            macros.get(token).cloned().map_or_else(
+                                || Ok(vec![Instruction::parse(token)?]),
+                                Ok,
+                            )
                         })
+                        .flatten_ok()
                         .collect::<Result<_>>()?;
                     ensure!(
                         macros.insert(name, body).is_none(),
                         "redefinition of macro `{name}`"
                     );
-                    None
+                    Vec::new()
                 } else {
-                    Some(Instruction::parse(token)?)
+                    macros.get(token).cloned().map_or_else(
+                        || Ok(vec![Instruction::parse(token)?]),
+                        anyhow::Ok,
+                    )?
                 }))
             })
-            .filter_map(Result::transpose)
+            .flatten_ok()
             .collect::<Result<_>>()?,
         })
     }
