@@ -8,11 +8,16 @@ pub struct Program {
 
 impl Program {
     pub fn parse(source_code: &str) -> Result<Self> {
-        let mut tokens = source_code.lines().flat_map(|line| {
-            line.split_once('#')
-                .map_or(line, |(line, _comment)| line)
-                .split_whitespace()
-        });
+        #![allow(clippy::unused_peekable)]
+
+        let mut tokens = source_code
+            .lines()
+            .flat_map(|line| {
+                line.split_once('#')
+                    .map_or(line, |(line, _comment)| line)
+                    .split_whitespace()
+            })
+            .peekable();
 
         let mut macros = HashMap::<&str, Vec<Instruction>>::new();
 
@@ -30,8 +35,7 @@ impl Program {
                         .filter(|&name| !matches!(name, "macro" | "end"))
                         .context("macro definition has no name")?;
                     let body = tokens
-                        .by_ref()
-                        .take_while(|&token| token != "end")
+                        .peeking_take_while(|&token| token != "end")
                         .map(|token| {
                             ensure!(
                                 token != "macro",
@@ -44,6 +48,10 @@ impl Program {
                         })
                         .flatten_ok()
                         .collect::<Result<_>>()?;
+                    ensure!(
+                        tokens.next() == Some("end"),
+                        "unterminated macro definition"
+                    );
                     ensure!(
                         macros.insert(name, body).is_none(),
                         "redefinition of macro `{name}`"
