@@ -19,7 +19,7 @@ impl Program {
             })
             .peekable();
 
-        let mut macros = HashMap::<&str, Vec<Instruction>>::new();
+        let mut macros = HashMap::new();
 
         Ok(Self {
             instructions: crate::iter::try_from_fn(|| {
@@ -41,10 +41,10 @@ impl Program {
                                 token != "macro",
                                 "nested macros are not supported"
                             );
-                            macros.get(token).cloned().map_or_else(
-                                || Ok(vec![Instruction::parse(token)?]),
-                                Ok,
-                            )
+                            Ok(macros
+                                .get(token)
+                                .cloned()
+                                .unwrap_or_else(|| vec![token]))
                         })
                         .flatten_ok()
                         .collect::<Result<_>>()?;
@@ -58,13 +58,11 @@ impl Program {
                     );
                     Vec::new()
                 } else {
-                    macros.get(token).cloned().map_or_else(
-                        || Ok(vec![Instruction::parse(token)?]),
-                        anyhow::Ok,
-                    )?
+                    macros.get(token).cloned().unwrap_or_else(|| vec![token])
                 }))
             })
             .flatten_ok()
+            .map(|res| res.and_then(Instruction::parse))
             .collect::<Result<_>>()?,
         })
     }
