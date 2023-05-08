@@ -41,6 +41,24 @@ you, including ensuring that the prelude and the compiler itself are up to date:
 
 For now, there is only one data type: `i32`, the signed 32-bit integer.
 
+## Macros
+
+A macro is a sequence of tokens that has been given a name. When the name
+appears later in the program, it gets replaced with said tokens.
+
+```spackel
+macro add-five
+  5 +
+end
+
+4 add-five println
+```
+
+The program above will expand to `4 5 + println`, printing 9.
+
+Macros cannot be nested, but you can use a previously defined macro in the
+definition of a new macro.
+
 ## Instructions
 
 ### Constants
