@@ -30,17 +30,13 @@ fn expand_macros<'a>(
 ) -> impl Iterator<Item = Result<&'a str>> {
     #![allow(clippy::unused_peekable)]
 
-    let mut tokens = tokens.peekable();
+    let tokens = tokens.peekable();
     let mut macros = HashMap::new();
 
-    crate::iter::try_from_fn(move || {
-        let Some(token) = tokens.next() else {
-            return Ok(None);
-        };
-
+    crate::iter::batching_map(tokens, move |tokens, token| {
         ensure!(token != "end", "unexpected `end`");
 
-        Ok(Some(if token == "macro" {
+        Ok(if token == "macro" {
             let name = tokens
                 .next()
                 .filter(|&name| !matches!(name, "macro" | "end"))
@@ -70,7 +66,7 @@ fn expand_macros<'a>(
             Vec::new()
         } else {
             macros.get(token).cloned().unwrap_or_else(|| vec![token])
-        }))
+        })
     })
     .flatten_ok()
 }
