@@ -1,5 +1,5 @@
 use crate::{
-    ir::{BinMathOp, Instruction, Program},
+    ir::{BinMathOp, Comparison, Instruction, Program},
     stack::Stack,
 };
 
@@ -56,6 +56,17 @@ impl Interpreter {
                         _ => a + b,
                     },
                 });
+            }
+            Instruction::Comparison(comparison) => {
+                let b = self.pop();
+                let a = self.pop();
+                self.push(i32::from(match comparison {
+                    Comparison::Lt => a < b,
+                    Comparison::Le => a <= b,
+                    Comparison::Eq => a == b,
+                    Comparison::Ge => a >= b,
+                    Comparison::Gt => a > b,
+                }));
             }
             Instruction::Drop => {
                 self.pop();

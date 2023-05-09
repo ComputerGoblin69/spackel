@@ -62,9 +62,9 @@ impl Checker {
                 self.stack.push(I32);
                 Ok(())
             }
-            Instruction::BinMathOp(_) | Instruction::Nip => {
-                self.transform(&[I32; 2], &[I32])
-            }
+            Instruction::BinMathOp(_)
+            | Instruction::Comparison(_)
+            | Instruction::Nip => self.transform(&[I32; 2], &[I32]),
             Instruction::Println
             | Instruction::PrintChar
             | Instruction::Drop => self.take(&[I32]),

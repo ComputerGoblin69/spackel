@@ -81,6 +81,7 @@ pub enum Instruction {
     Println,
     PrintChar,
     BinMathOp(BinMathOp),
+    Comparison(Comparison),
     Drop,
     Dup,
     Swap,
@@ -100,6 +101,11 @@ impl Instruction {
             "/" => Self::BinMathOp(BinMathOp::Div),
             "%" => Self::BinMathOp(BinMathOp::Rem),
             "+🤡" => Self::BinMathOp(BinMathOp::SillyAdd),
+            "<" => Self::Comparison(Comparison::Lt),
+            "<=" => Self::Comparison(Comparison::Le),
+            "=" => Self::Comparison(Comparison::Eq),
+            ">" => Self::Comparison(Comparison::Ge),
+            ">=" => Self::Comparison(Comparison::Gt),
             "ß" => Self::Push(1945),
             "drop" => Self::Drop,
             "dup" => Self::Dup,
@@ -124,4 +130,13 @@ pub enum BinMathOp {
     Div,
     Rem,
     SillyAdd,
+}
+
+#[derive(Clone, Copy)]
+pub enum Comparison {
+    Lt,
+    Le,
+    Eq,
+    Ge,
+    Gt,
 }

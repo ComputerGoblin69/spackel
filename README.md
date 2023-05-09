@@ -80,6 +80,16 @@ definition of a new macro.
     - $10+9 = 21$
     - $1+1 = 1$
 
+### Comparisons
+
+Since there is no boolean type yet, these return an `i32` that is 0 or 1.
+
+- `<`: less than.
+- `<=`: less than or equal.
+- `=`: equal.
+- `>=`: greater than or equal.
+- `>`: greater than.
+
 ### Stack manipulation
 
 - `drop`: pops one element.

@@ -1,5 +1,5 @@
 use crate::{
-    ir::{BinMathOp, Instruction, Program},
+    ir::{BinMathOp, Comparison, Instruction, Program},
     stack::Stack,
 };
 use anyhow::Result;
@@ -10,8 +10,8 @@ use cranelift::{
     },
     prelude::{
         isa::TargetIsa, settings, types::I32, AbiParam, Configurable,
-        FunctionBuilder, FunctionBuilderContext, InstBuilder, Signature, Type,
-        Value,
+        FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC, Signature,
+        Type, Value,
     },
 };
 use cranelift_module::{DataContext, DataId, FuncId, Linkage, Module};
@@ -179,6 +179,22 @@ impl Compiler {
                     BinMathOp::Rem => fb.ins().srem(a, b),
                     BinMathOp::SillyAdd => todo!(),
                 });
+            }
+            Instruction::Comparison(comparison) => {
+                let b = self.pop();
+                let a = self.pop();
+                let res = fb.ins().icmp(
+                    match comparison {
+                        Comparison::Lt => IntCC::SignedLessThan,
+                        Comparison::Le => IntCC::SignedLessThanOrEqual,
+                        Comparison::Eq => IntCC::Equal,
+                        Comparison::Ge => IntCC::SignedGreaterThanOrEqual,
+                        Comparison::Gt => IntCC::SignedGreaterThan,
+                    },
+                    a,
+                    b,
+                );
+                self.push(fb.ins().sextend(I32, res));
             }
             Instruction::Drop => {
                 self.pop();
