@@ -161,6 +161,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
 
 [[package]]
+name = "extra-iterators"
+version = "0.1.0"
+source = "git+https://github.com/Johan-Mi/extra-iterators#feab9569b1c6b069e9f0a7e75cb78f7e906dce55"
+
+[[package]]
 name = "fallible-iterator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -285,6 +290,7 @@ dependencies = [
  "cranelift",
  "cranelift-module",
  "cranelift-object",
+ "extra-iterators",
  "itertools",
 ]
 

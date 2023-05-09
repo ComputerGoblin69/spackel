@@ -33,7 +33,7 @@ fn expand_macros<'a>(
     let tokens = tokens.peekable();
     let mut macros = HashMap::new();
 
-    crate::iter::batching_map(tokens, move |tokens, token| {
+    extra_iterators::batching_map(tokens, move |tokens, token| {
         ensure!(token != "end", "unexpected `end`");
 
         Ok(if token == "macro" {
