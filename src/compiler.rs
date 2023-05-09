@@ -26,6 +26,7 @@ pub struct Options<'a> {
 pub fn compile(program: &Program, options: &Options) -> Result<()> {
     let mut shared_builder = settings::builder();
     shared_builder.enable("is_pic")?;
+    shared_builder.set("opt_level", "speed_and_size")?;
 
     let shared_flags = settings::Flags::new(shared_builder);
     let isa = cranelift::codegen::isa::lookup_by_name(options.target_triple)?
