@@ -5,7 +5,7 @@ extern "C" {
 }
 
 #[no_mangle]
-pub unsafe fn spkl_print_char(n: u32) {
+pub unsafe extern "C" fn spkl_print_char(n: u32) {
     let mut buf = [0; 4];
     let s = char::from_u32(n)
         .unwrap_or(char::REPLACEMENT_CHARACTER)
