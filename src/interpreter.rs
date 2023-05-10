@@ -3,7 +3,7 @@ use crate::{
     stack::Stack,
 };
 
-pub fn interpret(program: &Program) {
+pub fn interpret(program: &crate::typ::Checked<Program>) {
     Interpreter { stack: Vec::new() }.interpret(program);
 }
 

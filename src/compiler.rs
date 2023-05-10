@@ -25,7 +25,10 @@ pub struct Options<'a> {
     pub out_path: &'a Path,
 }
 
-pub fn compile(program: &Program, options: &Options) -> Result<()> {
+pub fn compile(
+    program: &crate::typ::Checked<Program>,
+    options: &Options,
+) -> Result<()> {
     let mut shared_builder = settings::builder();
     shared_builder.enable("is_pic")?;
     shared_builder.set("opt_level", "speed_and_size")?;

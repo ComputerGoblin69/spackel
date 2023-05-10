@@ -31,7 +31,7 @@ fn main() -> Result<()> {
         .context("failed to read source file")?;
 
     let program = ir::Program::parse(&source_code)?;
-    typ::check(&program)?;
+    let program = typ::check(program)?;
 
     match command {
         Command::Run => {
