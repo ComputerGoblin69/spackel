@@ -39,7 +39,9 @@ you, including ensuring that the prelude and the compiler itself are up to date:
 
 ## Data types
 
-For now, there is only one data type: `i32`, the signed 32-bit integer.
+- `i32`: the signed 32-bit integer type.
+- `bool`: boolean `true` or `false`.
+  **NOTE: booleans are not fully implemented yet.**
 
 ## Macros
 
@@ -64,6 +66,7 @@ definition of a new macro.
 ### Constants
 
 - Integers: at least one decimal digit, optionally preceded by a `+` or `-`.
+- Booleans: `true` or `false`.
 - `ß`: pushes the number 1945.
 
 ### Math
@@ -81,8 +84,6 @@ definition of a new macro.
     - $1+1 = 1$
 
 ### Comparisons
-
-Since there is no boolean type yet, these return an `i32` that is 0 or 1.
 
 - `<`: less than.
 - `<=`: less than or equal.

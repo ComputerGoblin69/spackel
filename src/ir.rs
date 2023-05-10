@@ -74,6 +74,8 @@ fn expand_macros<'a>(
 #[derive(Clone, Copy)]
 pub enum Instruction {
     Push(i32),
+    True,
+    False,
     Println,
     PrintChar,
     BinMathOp(BinMathOp),
@@ -89,6 +91,8 @@ pub enum Instruction {
 impl Instruction {
     fn parse(word: &str) -> Result<Self> {
         Ok(match word {
+            "true" => Self::True,
+            "false" => Self::False,
             "println" => Self::Println,
             "print-char" => Self::PrintChar,
             "+" => Self::BinMathOp(BinMathOp::Add),

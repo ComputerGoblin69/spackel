@@ -9,9 +9,11 @@ use cranelift::{
         Context,
     },
     prelude::{
-        isa::TargetIsa, settings, types::I32, AbiParam, Configurable,
-        FunctionBuilder, FunctionBuilderContext, InstBuilder, IntCC, Signature,
-        Type, Value,
+        isa::TargetIsa,
+        settings,
+        types::{I32, I8},
+        AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext,
+        InstBuilder, IntCC, Signature, Type, Value,
     },
 };
 use cranelift_module::{DataContext, DataId, FuncId, Linkage, Module};
@@ -160,6 +162,8 @@ impl Compiler {
             Instruction::Push(number) => {
                 self.stack.push(fb.ins().iconst(I32, i64::from(number)));
             }
+            Instruction::True => self.stack.push(fb.ins().iconst(I8, 1)),
+            Instruction::False => self.stack.push(fb.ins().iconst(I8, 0)),
             Instruction::Println => {
                 let n = self.pop();
                 let fmt = self.allocate_str("%d\n\0", fb);
@@ -184,7 +188,7 @@ impl Compiler {
             Instruction::Comparison(comparison) => {
                 let b = self.pop();
                 let a = self.pop();
-                let res = fb.ins().icmp(
+                self.push(fb.ins().icmp(
                     match comparison {
                         Comparison::Lt => IntCC::SignedLessThan,
                         Comparison::Le => IntCC::SignedLessThanOrEqual,
@@ -194,8 +198,7 @@ impl Compiler {
                     },
                     a,
                     b,
-                );
-                self.push(fb.ins().sextend(I32, res));
+                ));
             }
             Instruction::Drop => {
                 self.pop();
