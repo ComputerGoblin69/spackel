@@ -13,4 +13,9 @@
  (#match? @function.builtin "^(println|print-char|\\+|-|\\*|/|%|ß|drop|dup|swap|over|nip|tuck)$")
 )
 
+(
+ (word) @constant.builtin.boolean
+ (#match? @constant.builtin.boolean "^(true|false)$")
+)
+
 (word) @variable
