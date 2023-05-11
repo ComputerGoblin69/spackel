@@ -49,39 +49,78 @@ impl Checker {
         Ok(Checked(program))
     }
 
-    fn take(&mut self, types: &[Type]) -> Result<()> {
+    fn transform(
+        &mut self,
+        inputs: &[Parameter],
+        outputs: &[Return],
+    ) -> Result<()> {
         ensure!(
-            self.stack.ends_with(types),
+            (self.stack.len() >= inputs.len()
+                && self.stack[self.stack.len() - inputs.len()..] == *inputs),
             "expected types `{}` but got `{}`",
-            types.iter().format(" "),
+            inputs.iter().format(" "),
             self.stack.iter().format(" ")
         );
-        let new_len = self.stack.len() - types.len();
-        self.stack.truncate(new_len);
-        Ok(())
-    }
+        let new_len = self.stack.len() - inputs.len();
+        let consumed = self.stack.split_off(new_len);
 
-    fn transform(&mut self, inputs: &[Type], outputs: &[Type]) -> Result<()> {
-        self.take(inputs)?;
-        self.stack.extend(outputs);
+        self.stack.extend(outputs.iter().map(|&out| match out {
+            Return::Concrete(typ) => typ,
+            Return::Get(i) => consumed[i],
+        }));
         Ok(())
     }
 
     fn check_instruction(&mut self, instruction: Instruction) -> Result<()> {
+        use Parameter::{Any, Concrete as P};
+        use Return::{Concrete as R, Get};
         use Type::{Bool, I32};
-        let (inputs, outputs): (&[Type], &[Type]) = match instruction {
-            Instruction::Push(_) => (&[], &[I32]),
-            Instruction::True | Instruction::False => (&[], &[Bool]),
-            Instruction::BinMathOp(_) | Instruction::Nip => (&[I32; 2], &[I32]),
-            Instruction::Comparison(_) => (&[I32; 2], &[Bool]),
+
+        let (inputs, outputs): (&[Parameter], &[Return]) = match instruction {
+            Instruction::Push(_) => (&[], &[R(I32)]),
+            Instruction::True | Instruction::False => (&[], &[R(Bool)]),
+            Instruction::BinMathOp(_) => (&[P(I32); 2], &[R(I32)]),
+            Instruction::Comparison(_) => (&[P(I32); 2], &[R(Bool)]),
             Instruction::Print
             | Instruction::Println
-            | Instruction::PrintChar
-            | Instruction::Drop => (&[I32], &[]),
-            Instruction::Dup => (&[I32], &[I32; 2]),
-            Instruction::Swap => (&[I32; 2], &[I32; 2]),
-            Instruction::Over | Instruction::Tuck => (&[I32; 2], &[I32; 3]),
+            | Instruction::PrintChar => (&[P(I32)], &[]),
+            Instruction::Drop => (&[Any], &[]),
+            Instruction::Dup => (&[Any], &[Get(0); 2]),
+            Instruction::Swap => (&[Any; 2], &[Get(1), Get(0)]),
+            Instruction::Over => (&[Any; 2], &[Get(0), Get(1), Get(0)]),
+            Instruction::Nip => (&[Any; 2], &[Get(1)]),
+            Instruction::Tuck => (&[Any; 2], &[Get(1), Get(0), Get(1)]),
         };
         self.transform(inputs, outputs)
     }
+}
+
+#[derive(Clone, Copy)]
+enum Parameter {
+    Concrete(Type),
+    Any,
+}
+
+impl PartialEq<Parameter> for Type {
+    fn eq(&self, other: &Parameter) -> bool {
+        match other {
+            Parameter::Concrete(typ) => self == typ,
+            Parameter::Any => true,
+        }
+    }
+}
+
+impl fmt::Display for Parameter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Concrete(typ) => typ.fmt(f),
+            Self::Any => f.write_str("<any>"),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Return {
+    Concrete(Type),
+    Get(usize),
 }
