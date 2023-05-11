@@ -15,7 +15,7 @@ module.exports = grammar({
 
     number: $ => /[+-]?\d+/,
 
-    word: $ => /[^#\s]\S*/,
+    word: $ => /[^#\s]+/,
 
     line_comment: $ => /#.*/,
   },
