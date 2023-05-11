@@ -48,6 +48,7 @@ impl Interpreter {
             Instruction::Push(number) => self.push(Value::I32(number)),
             Instruction::True => self.push(Value::Bool(true)),
             Instruction::False => self.push(Value::Bool(false)),
+            Instruction::Print => print!("{}", self.pop_i32()),
             Instruction::Println => println!("{}", self.pop_i32()),
             #[allow(clippy::cast_sign_loss)]
             Instruction::PrintChar => print!(

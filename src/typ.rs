@@ -74,7 +74,8 @@ impl Checker {
             Instruction::True | Instruction::False => (&[], &[Bool]),
             Instruction::BinMathOp(_) | Instruction::Nip => (&[I32; 2], &[I32]),
             Instruction::Comparison(_) => (&[I32; 2], &[Bool]),
-            Instruction::Println
+            Instruction::Print
+            | Instruction::Println
             | Instruction::PrintChar
             | Instruction::Drop => (&[I32], &[]),
             Instruction::Dup => (&[I32], &[I32; 2]),

@@ -76,6 +76,7 @@ pub enum Instruction {
     Push(i32),
     True,
     False,
+    Print,
     Println,
     PrintChar,
     BinMathOp(BinMathOp),
@@ -93,6 +94,7 @@ impl Instruction {
         Ok(match word {
             "true" => Self::True,
             "false" => Self::False,
+            "print" => Self::Print,
             "println" => Self::Println,
             "print-char" => Self::PrintChar,
             "+" => Self::BinMathOp(BinMathOp::Add),

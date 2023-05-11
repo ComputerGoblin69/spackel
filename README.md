@@ -103,6 +103,8 @@ definition of a new macro.
 
 ### IO
 
+- `print`: pops and prints the top element. Note that this does not flush the
+  output stream.
 - `println`: pops and prints the top element, followed by a new line.
 - `print-char`: pops the top element, reinterprets it as unsigned, converts that
   to a Unicode scalar value, or `U+FFFD REPLACEMENT CHARACTER` in the case of an

@@ -167,6 +167,11 @@ impl Compiler {
             }
             Instruction::True => self.stack.push(fb.ins().iconst(I8, 1)),
             Instruction::False => self.stack.push(fb.ins().iconst(I8, 0)),
+            Instruction::Print => {
+                let n = self.pop();
+                let fmt = self.allocate_str("%d\0", fb);
+                self.call_extern("printf", &[fmt, n], fb);
+            }
             Instruction::Println => {
                 let n = self.pop();
                 let fmt = self.allocate_str("%d\n\0", fb);
