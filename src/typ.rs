@@ -84,6 +84,8 @@ impl Checker {
             Instruction::Print
             | Instruction::Println
             | Instruction::PrintChar => (&[P(I32)], &[]),
+            Instruction::Not => (&[P(Bool)], &[R(Bool)]),
+            Instruction::BinLogicOp(_) => (&[P(Bool); 2], &[R(Bool)]),
             Instruction::Drop => (&[Any], &[]),
             Instruction::Dup => (&[Any], &[Get(0); 2]),
             Instruction::Swap => (&[Any; 2], &[Get(1), Get(0)]),

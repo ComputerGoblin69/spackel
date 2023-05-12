@@ -1,5 +1,5 @@
 use crate::{
-    ir::{BinMathOp, Comparison, Instruction, Program},
+    ir::{BinLogicOp, BinMathOp, Comparison, Instruction, Program},
     stack::Stack,
 };
 
@@ -43,6 +43,13 @@ impl Interpreter {
         }
     }
 
+    fn pop_bool(&mut self) -> bool {
+        match self.pop() {
+            Value::Bool(b) => b,
+            _ => unreachable!(),
+        }
+    }
+
     fn interpret_instruction(&mut self, instruction: Instruction) {
         match instruction {
             Instruction::Push(number) => self.push(Value::I32(number)),
@@ -82,6 +89,22 @@ impl Interpreter {
                     Comparison::Eq => a == b,
                     Comparison::Ge => a >= b,
                     Comparison::Gt => a > b,
+                }));
+            }
+            Instruction::Not => {
+                let b = self.pop_bool();
+                self.push(Value::Bool(!b));
+            }
+            Instruction::BinLogicOp(op) => {
+                let b = self.pop_bool();
+                let a = self.pop_bool();
+                self.push(Value::Bool(match op {
+                    BinLogicOp::And => a && b,
+                    BinLogicOp::Or => a || b,
+                    BinLogicOp::Xor => a ^ b,
+                    BinLogicOp::Nand => !(a && b),
+                    BinLogicOp::Nor => !(a || b),
+                    BinLogicOp::Xnor => !(a ^ b),
                 }));
             }
             Instruction::Drop => {

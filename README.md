@@ -91,6 +91,16 @@ definition of a new macro.
 - `>=`: greater than or equal.
 - `>`: greater than.
 
+### Boolean logic
+
+- `not`
+- `and`
+- `or`
+- `xor`
+- `nand`: equivalent to `and not`.
+- `nor`: equivalent to `or not`.
+- `xnor`: equivalent to `xor not`.
+
 ### Stack manipulation
 
 - `drop`: pops one element.

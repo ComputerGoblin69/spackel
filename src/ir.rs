@@ -81,6 +81,8 @@ pub enum Instruction {
     PrintChar,
     BinMathOp(BinMathOp),
     Comparison(Comparison),
+    Not,
+    BinLogicOp(BinLogicOp),
     Drop,
     Dup,
     Swap,
@@ -108,6 +110,13 @@ impl Instruction {
             "=" => Self::Comparison(Comparison::Eq),
             ">" => Self::Comparison(Comparison::Ge),
             ">=" => Self::Comparison(Comparison::Gt),
+            "not" => Self::Not,
+            "and" => Self::BinLogicOp(BinLogicOp::And),
+            "or" => Self::BinLogicOp(BinLogicOp::Or),
+            "xor" => Self::BinLogicOp(BinLogicOp::Xor),
+            "nand" => Self::BinLogicOp(BinLogicOp::Nand),
+            "nor" => Self::BinLogicOp(BinLogicOp::Nor),
+            "xnor" => Self::BinLogicOp(BinLogicOp::Xnor),
             "ß" => Self::Push(1945),
             "drop" => Self::Drop,
             "dup" => Self::Dup,
@@ -141,4 +150,14 @@ pub enum Comparison {
     Eq,
     Ge,
     Gt,
+}
+
+#[derive(Clone, Copy)]
+pub enum BinLogicOp {
+    And,
+    Or,
+    Xor,
+    Nand,
+    Nor,
+    Xnor,
 }

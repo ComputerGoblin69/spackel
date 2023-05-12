@@ -1,5 +1,5 @@
 use crate::{
-    ir::{BinMathOp, Comparison, Instruction, Program},
+    ir::{BinLogicOp, BinMathOp, Comparison, Instruction, Program},
     stack::Stack,
 };
 use anyhow::Result;
@@ -207,6 +207,31 @@ impl Compiler {
                     a,
                     b,
                 ));
+            }
+            Instruction::Not => {
+                let b = self.pop();
+                self.push(fb.ins().bxor_imm(b, 1));
+            }
+            Instruction::BinLogicOp(op) => {
+                let b = self.pop();
+                let a = self.pop();
+                self.push(match op {
+                    BinLogicOp::And => fb.ins().band(a, b),
+                    BinLogicOp::Or => fb.ins().bor(a, b),
+                    BinLogicOp::Xor => fb.ins().bxor(a, b),
+                    BinLogicOp::Nand => {
+                        let res = fb.ins().band(a, b);
+                        fb.ins().bxor_imm(res, 1)
+                    }
+                    BinLogicOp::Nor => {
+                        let res = fb.ins().bor(a, b);
+                        fb.ins().bxor_imm(res, 1)
+                    }
+                    BinLogicOp::Xnor => {
+                        let res = fb.ins().bxor(a, b);
+                        fb.ins().bxor_imm(res, 1)
+                    }
+                });
             }
             Instruction::Drop => {
                 self.pop();
