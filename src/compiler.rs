@@ -3,18 +3,16 @@ use crate::{
     stack::Stack,
 };
 use anyhow::Result;
-use cranelift::{
+use cranelift::prelude::{
     codegen::{
         ir::{Function, Inst, UserFuncName},
         Context,
     },
-    prelude::{
-        isa::TargetIsa,
-        settings,
-        types::{I32, I8},
-        AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext,
-        InstBuilder, IntCC, Signature, Type, Value,
-    },
+    isa::TargetIsa,
+    settings,
+    types::{I32, I8},
+    AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext,
+    InstBuilder, IntCC, Signature, Type, Value,
 };
 use cranelift_module::{DataContext, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
