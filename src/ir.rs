@@ -1,4 +1,4 @@
-use anyhow::{ensure, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use itertools::Itertools;
 use std::collections::HashMap;
 
@@ -25,9 +25,6 @@ impl Program {
 fn expand_macros<'a>(
     tokens: impl Iterator<Item = &'a str>,
 ) -> impl Iterator<Item = Result<&'a str>> {
-    #![allow(clippy::unused_peekable)]
-
-    let tokens = tokens.peekable();
     let mut macros = HashMap::new();
 
     extra_iterators::batching_map(tokens, move |tokens, token| {
@@ -38,24 +35,25 @@ fn expand_macros<'a>(
                 .next()
                 .filter(|&name| !matches!(name, "macro" | "end"))
                 .context("macro definition has no name")?;
+            let mut found_end = false;
             let body = tokens
-                .peeking_take_while(|&token| token != "end")
-                .map(|token| {
-                    ensure!(
-                        token != "macro",
-                        "nested macros are not supported"
-                    );
-                    Ok(macros
+                .by_ref()
+                .map_while(|token| match token {
+                    "end" => {
+                        found_end = true;
+                        None
+                    }
+                    "macro" => {
+                        Some(Err(anyhow!("nested macros are not supported")))
+                    }
+                    _ => Some(Ok(macros
                         .get(token)
                         .cloned()
-                        .unwrap_or_else(|| vec![token]))
+                        .unwrap_or_else(|| vec![token]))),
                 })
                 .flatten_ok()
                 .collect::<Result<_>>()?;
-            ensure!(
-                tokens.next() == Some("end"),
-                "unterminated macro definition"
-            );
+            ensure!(found_end, "unterminated macro definition");
             ensure!(
                 macros.insert(name, body).is_none(),
                 "redefinition of macro `{name}`"
