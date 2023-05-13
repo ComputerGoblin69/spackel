@@ -8,14 +8,11 @@ pub struct Program {
 
 impl Program {
     pub fn parse(source_code: &str) -> Result<Self> {
-        let tokens = source_code
-            .lines()
-            .flat_map(|line| {
-                line.split_once('#')
-                    .map_or(line, |(line, _comment)| line)
-                    .split_whitespace()
-            })
-            .peekable();
+        let tokens = source_code.lines().flat_map(|line| {
+            line.split_once('#')
+                .map_or(line, |(line, _comment)| line)
+                .split_whitespace()
+        });
 
         Ok(Self {
             instructions: expand_macros(tokens)
