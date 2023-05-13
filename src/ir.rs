@@ -117,11 +117,10 @@ impl Instruction {
             "over" => Self::Over,
             "nip" => Self::Nip,
             "tuck" => Self::Tuck,
-            _ => {
-                Self::Push(word.parse().ok().with_context(|| {
-                    format!("unknown instruction: `{word}`")
-                })?)
-            }
+            _ => Self::Push(
+                word.parse()
+                    .map_err(|_| anyhow!("unknown instruction: `{word}`"))?,
+            ),
         })
     }
 }
