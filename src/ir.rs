@@ -16,7 +16,7 @@ impl Program {
 
         Ok(Self {
             instructions: expand_macros(tokens)
-                .map(|res| res.and_then(Instruction::parse))
+                .map(|res| Instruction::parse(res?))
                 .collect::<Result<_>>()?,
         })
     }
