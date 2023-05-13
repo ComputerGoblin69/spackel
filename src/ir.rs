@@ -27,10 +27,9 @@ fn expand_macros<'a>(
 ) -> impl Iterator<Item = Result<&'a str>> {
     let mut macros = HashMap::new();
 
-    extra_iterators::batching_map(tokens, move |tokens, token| {
-        ensure!(token != "end", "unexpected `end`");
-
-        Ok(if token == "macro" {
+    extra_iterators::batching_map(tokens, move |tokens, token| match token {
+        "end" => Err(anyhow!("unexpected `end`")),
+        "macro" => {
             let name = tokens
                 .next()
                 .filter(|&name| !matches!(name, "macro" | "end"))
@@ -58,10 +57,9 @@ fn expand_macros<'a>(
                 macros.insert(name, body).is_none(),
                 "redefinition of macro `{name}`"
             );
-            Vec::new()
-        } else {
-            macros.get(token).cloned().unwrap_or_else(|| vec![token])
-        })
+            Ok(Vec::new())
+        }
+        _ => Ok(macros.get(token).cloned().unwrap_or_else(|| vec![token])),
     })
     .flatten_ok()
 }
