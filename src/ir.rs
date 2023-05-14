@@ -38,15 +38,25 @@ fn expand_macros<'a>(
                 .filter(|&name| !matches!(name, "macro" | "end"))
                 .context("macro definition has no name")?;
             let mut found_end = false;
+            let mut layers = 0_usize;
             let body = tokens
                 .by_ref()
                 .map_while(|token| match token {
                     "end" => {
-                        found_end = true;
-                        None
+                        if layers == 0 {
+                            found_end = true;
+                            None
+                        } else {
+                            layers -= 1;
+                            Some(Ok(vec!["end"]))
+                        }
                     }
                     "macro" => {
                         Some(Err(anyhow!("nested macros are not supported")))
+                    }
+                    "then" => {
+                        layers += 1;
+                        Some(Ok(vec!["then"]))
                     }
                     _ => Some(Ok(macros
                         .get(token)

@@ -4,42 +4,18 @@ macro even
   2 % 0 =
 end
 
-macro print-even
-  69 print-char # E
+macro case
+  even then
+    69 print-char # E
+  else
+    79 print-char # O
+  end
 end
 
-macro print-odd
-  79 print-char # O
-end
-
-0 even then
-  print-even
-else
-  print-odd
-end
-
-1 even then
-  print-even
-else
-  print-odd
-end
-
-2 even then
-  print-even
-else
-  print-odd
-end
-
-3 even then
-  print-even
-else
-  print-odd
-end
-
-4 even then
-  print-even
-else
-  print-odd
-end
+0 case
+1 case
+2 case
+3 case
+4 case
 
 10 print-char # \n
