@@ -44,7 +44,7 @@ fn expand_macros<'a>(
                             None
                         } else {
                             layers -= 1;
-                            Some(Ok(vec!["end"]))
+                            Some(Ok(vec![token]))
                         }
                     }
                     "macro" => {
@@ -52,7 +52,7 @@ fn expand_macros<'a>(
                     }
                     "then" => {
                         layers += 1;
-                        Some(Ok(vec!["then"]))
+                        Some(Ok(vec![token]))
                     }
                     _ => Some(Ok(macros
                         .get(token)
