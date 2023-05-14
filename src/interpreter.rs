@@ -31,7 +31,7 @@ impl Stack for Interpreter {
 
 impl Interpreter {
     fn interpret(&mut self, program: &Program) {
-        for &instruction in &program.instructions {
+        for instruction in &program.instructions {
             self.interpret_instruction(instruction);
         }
     }
@@ -50,9 +50,9 @@ impl Interpreter {
         }
     }
 
-    fn interpret_instruction(&mut self, instruction: Instruction) {
+    fn interpret_instruction(&mut self, instruction: &Instruction) {
         match instruction {
-            Instruction::Push(number) => self.push(Value::I32(number)),
+            Instruction::Push(number) => self.push(Value::I32(*number)),
             Instruction::True => self.push(Value::Bool(true)),
             Instruction::False => self.push(Value::Bool(false)),
             Instruction::Print => print!("{}", self.pop_i32()),

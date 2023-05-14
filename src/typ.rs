@@ -38,7 +38,7 @@ struct Checker {
 
 impl Checker {
     fn check(&mut self, program: Program) -> Result<Checked<Program>> {
-        for &instruction in &program.instructions {
+        for instruction in &program.instructions {
             self.check_instruction(instruction)?;
         }
         ensure!(
@@ -71,7 +71,7 @@ impl Checker {
         Ok(())
     }
 
-    fn check_instruction(&mut self, instruction: Instruction) -> Result<()> {
+    fn check_instruction(&mut self, instruction: &Instruction) -> Result<()> {
         use Parameter::{Any, Concrete as P};
         use Return::{Concrete as R, Get};
         use Type::{Bool, I32};

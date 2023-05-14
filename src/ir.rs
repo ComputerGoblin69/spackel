@@ -64,7 +64,6 @@ fn expand_macros<'a>(
     .flatten_ok()
 }
 
-#[derive(Clone, Copy)]
 pub enum Instruction {
     Push(i32),
     True,
@@ -125,7 +124,6 @@ impl Instruction {
     }
 }
 
-#[derive(Clone, Copy)]
 pub enum BinMathOp {
     Add,
     Sub,
@@ -135,7 +133,6 @@ pub enum BinMathOp {
     SillyAdd,
 }
 
-#[derive(Clone, Copy)]
 pub enum Comparison {
     Lt,
     Le,
@@ -144,7 +141,6 @@ pub enum Comparison {
     Gt,
 }
 
-#[derive(Clone, Copy)]
 pub enum BinLogicOp {
     And,
     Or,
