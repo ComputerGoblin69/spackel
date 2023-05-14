@@ -41,7 +41,6 @@ you, including ensuring that the prelude and the compiler itself are up to date:
 
 - `i32`: the signed 32-bit integer type.
 - `bool`: boolean `true` or `false`.
-  **NOTE: booleans are not fully implemented yet.**
 
 ## Macros
 
