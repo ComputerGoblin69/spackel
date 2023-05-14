@@ -29,10 +29,11 @@ fn expand_macros<'a>(
 
     extra_iterators::batching_map(tokens, move |tokens, token| match token {
         "macro" => {
-            let name = tokens
-                .next()
-                .filter(|&name| !matches!(name, "macro" | "end"))
-                .context("macro definition has no name")?;
+            let name = tokens.next().context("macro definition has no name")?;
+            ensure!(
+                !is_keyword(name),
+                "keyword `{name}` cannot be used as a macro name"
+            );
             let mut found_end = false;
             let mut layers = 0_usize;
             let body = tokens
@@ -111,6 +112,10 @@ fn instructions_until_terminator<'a>(
     .collect::<Result<_>>()?;
 
     Ok((instructions, terminator))
+}
+
+fn is_keyword(token: &str) -> bool {
+    matches!(token, "macro" | "then" | "else" | "end")
 }
 
 pub enum Instruction {
