@@ -59,6 +59,12 @@ impl Interpreter {
                     }
                 }
             }
+            Instruction::ThenElse(then, else_) => {
+                for instruction in &**if self.pop_bool() { then } else { else_ }
+                {
+                    self.interpret_instruction(instruction);
+                }
+            }
             Instruction::Push(number) => self.push(Value::I32(*number)),
             Instruction::True => self.push(Value::Bool(true)),
             Instruction::False => self.push(Value::Bool(false)),

@@ -161,6 +161,9 @@ impl Compiler {
     ) {
         match instruction {
             Instruction::Then(body) => self.compile_then(body, fb),
+            Instruction::ThenElse(then, else_) => {
+                self.compile_then_else(then, else_, fb);
+            }
             Instruction::Push(number) => {
                 self.stack.push(fb.ins().iconst(I32, i64::from(*number)));
             }
@@ -267,6 +270,50 @@ impl Compiler {
         fb.seal_block(after);
 
         fb.switch_to_block(after);
+        self.stack = params_after;
+    }
+
+    fn compile_then_else(
+        &mut self,
+        then: &[Instruction],
+        else_: &[Instruction],
+        fb: &mut FunctionBuilder,
+    ) {
+        let then_block = fb.create_block();
+        let else_block = fb.create_block();
+        let after_block = fb.create_block();
+
+        let condition = self.pop();
+        fb.ins().brif(condition, then_block, &[], else_block, &[]);
+        fb.seal_block(then_block);
+        fb.seal_block(else_block);
+
+        let params_before = self.stack.clone();
+        fb.switch_to_block(then_block);
+        for instruction in then {
+            self.compile_instruction(instruction, fb);
+        }
+        let params_after = self
+            .stack
+            .iter()
+            .map(|&value| {
+                fb.append_block_param(
+                    after_block,
+                    fb.func.dfg.value_type(value),
+                )
+            })
+            .collect();
+        fb.ins().jump(after_block, &self.stack);
+
+        fb.switch_to_block(else_block);
+        self.stack = params_before;
+        for instruction in else_ {
+            self.compile_instruction(instruction, fb);
+        }
+        fb.ins().jump(after_block, &self.stack);
+        fb.seal_block(after_block);
+
+        fb.switch_to_block(after_block);
         self.stack = params_after;
     }
 }

@@ -11,9 +11,19 @@ module.exports = grammar({
     macro_definition: $ =>
       seq("macro", field("name", $.word), repeat($._instruction), "end"),
 
-    _instruction: $ => choice($.number, $.then_statement, $.word),
+    _instruction: $ =>
+      choice($.number, $.then_statement, $.then_else_statement, $.word),
 
     then_statement: $ => seq("then", repeat($._instruction), "end"),
+
+    then_else_statement: $ =>
+      seq(
+        "then",
+        repeat($._instruction),
+        "else",
+        repeat($._instruction),
+        "end"
+      ),
 
     number: $ => /[+-]?\d+/,
 

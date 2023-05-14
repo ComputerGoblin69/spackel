@@ -75,22 +75,32 @@ fn instructions_until_terminator<'a>(
         let Some(token) = tokens.next() else {
             return Ok(None);
         };
-        Ok(match token {
+        Ok(Some(match token {
             "end" | "else" => {
                 terminator = Some(token);
-                None
+                return Ok(None);
             }
             "then" => {
                 let (body, terminator) = instructions_until_terminator(tokens)?;
                 match terminator {
-                    Some("end") => {}
+                    Some("end") => Instruction::Then(body),
                     None => bail!("unterminated `then` statement"),
-                    Some(terminator) => bail!("unexpected `{terminator}`"),
+                    Some("else") => {
+                        let (else_, terminator) =
+                            instructions_until_terminator(tokens)?;
+                        match terminator {
+                            Some("end") => Instruction::ThenElse(body, else_),
+                            None => bail!("unterminated `then else` statement"),
+                            Some(terminator) => {
+                                bail!("unexpected `{terminator}`")
+                            }
+                        }
+                    }
+                    _ => unreachable!(),
                 }
-                Some(Instruction::Then(body))
             }
-            _ => Some(token.parse()?),
-        })
+            _ => token.parse()?,
+        }))
     })
     .collect::<Result<_>>()?;
 
@@ -99,6 +109,7 @@ fn instructions_until_terminator<'a>(
 
 pub enum Instruction {
     Then(Box<[Instruction]>),
+    ThenElse(Box<[Instruction]>, Box<[Instruction]>),
     Push(i32),
     True,
     False,

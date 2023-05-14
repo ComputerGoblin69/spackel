@@ -1,0 +1,45 @@
+# For each integer between 0 and 4, prints E if it's even or O if it's odd.
+
+macro even
+  2 % 0 =
+end
+
+macro print-even
+  69 print-char # E
+end
+
+macro print-odd
+  79 print-char # O
+end
+
+0 even then
+  print-even
+else
+  print-odd
+end
+
+1 even then
+  print-even
+else
+  print-odd
+end
+
+2 even then
+  print-even
+else
+  print-odd
+end
+
+3 even then
+  print-even
+else
+  print-odd
+end
+
+4 even then
+  print-even
+else
+  print-odd
+end
+
+10 print-char # \n

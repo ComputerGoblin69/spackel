@@ -77,7 +77,9 @@ impl Checker {
         use Type::{Bool, I32};
 
         let (inputs, outputs): (&[Parameter], &[Return]) = match instruction {
-            Instruction::Then(_) => (&[P(Bool)], &[]),
+            Instruction::Then(_) | Instruction::ThenElse(..) => {
+                (&[P(Bool)], &[])
+            }
             Instruction::Push(_) => (&[], &[R(I32)]),
             Instruction::True | Instruction::False => (&[], &[R(Bool)]),
             Instruction::BinMathOp(_) => (&[P(I32); 2], &[R(I32)]),
@@ -96,17 +98,36 @@ impl Checker {
         };
         self.transform(inputs, outputs)?;
 
-        if let Instruction::Then(body) = instruction {
-            let before = self.stack.clone();
-            for instruction in &**body {
-                self.check_instruction(instruction)?;
+        match instruction {
+            Instruction::Then(body) => {
+                let before = self.stack.clone();
+                for instruction in &**body {
+                    self.check_instruction(instruction)?;
+                }
+                ensure!(
+                    before == self.stack,
+                    "`then` statement changes types from `{}` to `{}`",
+                    before.iter().format(" "),
+                    self.stack.iter().format(" "),
+                );
             }
-            ensure!(
-                before == self.stack,
-                "`then` statement changes types from `{}` to `{}`",
-                before.iter().format(" "),
-                self.stack.iter().format(" "),
-            );
+            Instruction::ThenElse(then, else_) => {
+                let before = self.stack.clone();
+                for instruction in &**then {
+                    self.check_instruction(instruction)?;
+                }
+                let then_types = std::mem::replace(&mut self.stack, before);
+                for instruction in &**else_ {
+                    self.check_instruction(instruction)?;
+                }
+                ensure!(
+                    then_types == self.stack,
+                    "`then else` statement diverges between types `{}` and `{}`",
+                    then_types.iter().format(" "),
+                    self.stack.iter().format(" "),
+                );
+            }
+            _ => {}
         }
 
         Ok(())

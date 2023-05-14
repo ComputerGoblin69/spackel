@@ -4,7 +4,10 @@
 
 "macro" @keyword.function
 "end" @keyword
-"then" @keyword.control.conditional
+[
+  "then"
+  "else"
+] @keyword.control.conditional
 
 (macro_definition
   name: (word) @function.macro)

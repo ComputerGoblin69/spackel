@@ -64,6 +64,8 @@ definition of a new macro.
 ## Control flow
 
 - `then BODY end`: pops a boolean and runs `BODY` if it is true.
+- `then THEN else ELSE end`: pops a boolean and runs `THEN` if it is true or
+  `ELSE` if it is false.
 
 ## Instructions
 
