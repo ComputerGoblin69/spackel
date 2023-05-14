@@ -3,7 +3,7 @@ use itertools::Itertools;
 use std::collections::HashMap;
 
 pub struct Program {
-    pub instructions: Vec<Instruction>,
+    pub instructions: Box<[Instruction]>,
 }
 
 impl Program {

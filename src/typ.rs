@@ -38,7 +38,7 @@ struct Checker {
 
 impl Checker {
     fn check(&mut self, program: Program) -> Result<Checked<Program>> {
-        for instruction in &program.instructions {
+        for instruction in &*program.instructions {
             self.check_instruction(instruction)?;
         }
         ensure!(

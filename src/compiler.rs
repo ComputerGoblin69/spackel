@@ -147,7 +147,7 @@ impl Compiler {
     }
 
     fn compile(&mut self, program: &Program, fb: &mut FunctionBuilder) {
-        for instruction in &program.instructions {
+        for instruction in &*program.instructions {
             self.compile_instruction(instruction, fb);
         }
         let exit_code = fb.ins().iconst(I32, 0);
