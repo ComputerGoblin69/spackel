@@ -1,3 +1,4 @@
+use crate::lexer::{lex, Token};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use itertools::{process_results, Itertools};
 use std::{collections::HashMap, str::FromStr};
@@ -8,12 +9,7 @@ pub struct Program {
 
 impl Program {
     pub fn parse(source_code: &str) -> Result<Self> {
-        let tokens = source_code.lines().flat_map(|line| {
-            line.split_once('#')
-                .map_or(line, |(line, _comment)| line)
-                .split_whitespace()
-        });
-        let tokens = expand_macros(tokens);
+        let tokens = expand_macros(lex(source_code));
         let (instructions, terminator) =
             process_results(tokens, |mut tokens| {
                 instructions_until_terminator(&mut tokens)
@@ -27,8 +23,8 @@ impl Program {
 }
 
 fn expand_macros<'a>(
-    tokens: impl Iterator<Item = &'a str>,
-) -> impl Iterator<Item = Result<&'a str>> {
+    tokens: impl Iterator<Item = Token<'a>>,
+) -> impl Iterator<Item = Result<Token<'a>>> {
     let mut macros = HashMap::new();
 
     extra_iterators::batching_map(tokens, move |tokens, token| match token {
@@ -78,8 +74,8 @@ fn expand_macros<'a>(
 }
 
 fn instructions_until_terminator<'a>(
-    tokens: &mut impl Iterator<Item = &'a str>,
-) -> Result<(Box<[Instruction]>, Option<&'a str>)> {
+    tokens: &mut impl Iterator<Item = Token<'a>>,
+) -> Result<(Box<[Instruction]>, Option<Token<'a>>)> {
     let mut terminator = None;
     let instructions = extra_iterators::try_from_fn(|| {
         let Some(token) = tokens.next() else {

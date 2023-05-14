@@ -4,6 +4,7 @@
 mod compiler;
 mod interpreter;
 mod ir;
+mod lexer;
 mod stack;
 mod typ;
 
