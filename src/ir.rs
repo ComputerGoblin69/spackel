@@ -76,8 +76,8 @@ fn instructions_until_terminator<'a>(
             return Ok(None);
         };
         Ok(match token {
-            "end" => {
-                terminator = Some("end");
+            "end" | "else" => {
+                terminator = Some(token);
                 None
             }
             "then" => {
@@ -85,7 +85,7 @@ fn instructions_until_terminator<'a>(
                 match terminator {
                     Some("end") => {}
                     None => bail!("unterminated `then` statement"),
-                    _ => unreachable!(),
+                    Some(terminator) => bail!("unexpected `{terminator}`"),
                 }
                 Some(Instruction::Then(body))
             }
