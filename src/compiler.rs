@@ -160,6 +160,7 @@ impl Compiler {
         fb: &mut FunctionBuilder,
     ) {
         match instruction {
+            Instruction::Then(body) => self.compile_then(body, fb),
             Instruction::Push(number) => {
                 self.stack.push(fb.ins().iconst(I32, i64::from(*number)));
             }
@@ -240,6 +241,33 @@ impl Compiler {
             Instruction::Nip => self.nip(),
             Instruction::Tuck => self.tuck(),
         }
+    }
+
+    fn compile_then(&mut self, body: &[Instruction], fb: &mut FunctionBuilder) {
+        let then = fb.create_block();
+        let after = fb.create_block();
+
+        let condition = self.pop();
+        fb.ins().brif(condition, then, &[], after, &self.stack);
+        fb.seal_block(then);
+
+        let params_after = self
+            .stack
+            .iter()
+            .map(|&value| {
+                fb.append_block_param(after, fb.func.dfg.value_type(value))
+            })
+            .collect();
+
+        fb.switch_to_block(then);
+        for instruction in body {
+            self.compile_instruction(instruction, fb);
+        }
+        fb.ins().jump(after, &self.stack);
+        fb.seal_block(after);
+
+        fb.switch_to_block(after);
+        self.stack = params_after;
     }
 }
 

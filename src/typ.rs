@@ -77,6 +77,7 @@ impl Checker {
         use Type::{Bool, I32};
 
         let (inputs, outputs): (&[Parameter], &[Return]) = match instruction {
+            Instruction::Then(_) => (&[P(Bool)], &[]),
             Instruction::Push(_) => (&[], &[R(I32)]),
             Instruction::True | Instruction::False => (&[], &[R(Bool)]),
             Instruction::BinMathOp(_) => (&[P(I32); 2], &[R(I32)]),
@@ -93,7 +94,22 @@ impl Checker {
             Instruction::Nip => (&[Any; 2], &[Get(1)]),
             Instruction::Tuck => (&[Any; 2], &[Get(1), Get(0), Get(1)]),
         };
-        self.transform(inputs, outputs)
+        self.transform(inputs, outputs)?;
+
+        if let Instruction::Then(body) = instruction {
+            let before = self.stack.clone();
+            for instruction in &**body {
+                self.check_instruction(instruction)?;
+            }
+            ensure!(
+                before == self.stack,
+                "`then` statement changes types from `{}` to `{}`",
+                before.iter().format(" "),
+                self.stack.iter().format(" "),
+            );
+        }
+
+        Ok(())
     }
 }
 

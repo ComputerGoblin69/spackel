@@ -1,6 +1,6 @@
-use anyhow::{anyhow, ensure, Context, Result};
-use itertools::Itertools;
-use std::collections::HashMap;
+use anyhow::{anyhow, bail, ensure, Context, Result};
+use itertools::{process_results, Itertools};
+use std::{collections::HashMap, str::FromStr};
 
 pub struct Program {
     pub instructions: Box<[Instruction]>,
@@ -13,12 +13,16 @@ impl Program {
                 .map_or(line, |(line, _comment)| line)
                 .split_whitespace()
         });
+        let tokens = expand_macros(tokens);
+        let (instructions, terminator) =
+            process_results(tokens, |mut tokens| {
+                instructions_until_terminator(&mut tokens)
+            })??;
+        if let Some(terminator) = terminator {
+            bail!("unexpected `{terminator}`");
+        }
 
-        Ok(Self {
-            instructions: expand_macros(tokens)
-                .map(|res| Instruction::parse(res?))
-                .collect::<Result<_>>()?,
-        })
+        Ok(Self { instructions })
     }
 }
 
@@ -28,7 +32,6 @@ fn expand_macros<'a>(
     let mut macros = HashMap::new();
 
     extra_iterators::batching_map(tokens, move |tokens, token| match token {
-        "end" => Err(anyhow!("unexpected `end`")),
         "macro" => {
             let name = tokens
                 .next()
@@ -64,7 +67,38 @@ fn expand_macros<'a>(
     .flatten_ok()
 }
 
+fn instructions_until_terminator<'a>(
+    tokens: &mut impl Iterator<Item = &'a str>,
+) -> Result<(Box<[Instruction]>, Option<&'a str>)> {
+    let mut terminator = None;
+    let instructions = extra_iterators::try_from_fn(|| {
+        let Some(token) = tokens.next() else {
+            return Ok(None);
+        };
+        Ok(match token {
+            "end" => {
+                terminator = Some("end");
+                None
+            }
+            "then" => {
+                let (body, terminator) = instructions_until_terminator(tokens)?;
+                match terminator {
+                    Some("end") => {}
+                    None => bail!("unterminated `then` statement"),
+                    _ => unreachable!(),
+                }
+                Some(Instruction::Then(body))
+            }
+            _ => Some(token.parse()?),
+        })
+    })
+    .collect::<Result<_>>()?;
+
+    Ok((instructions, terminator))
+}
+
 pub enum Instruction {
+    Then(Box<[Instruction]>),
     Push(i32),
     True,
     False,
@@ -83,8 +117,10 @@ pub enum Instruction {
     Tuck,
 }
 
-impl Instruction {
-    fn parse(word: &str) -> Result<Self> {
+impl FromStr for Instruction {
+    type Err = anyhow::Error;
+
+    fn from_str(word: &str) -> Result<Self> {
         Ok(match word {
             "true" => Self::True,
             "false" => Self::False,

@@ -1,0 +1,23 @@
+macro even
+  2 % 0 =
+end
+
+0 even then
+  0 println
+end
+
+1 even then
+  1 println
+end
+
+2 even then
+  2 println
+end
+
+3 even then
+  3 println
+end
+
+4 even then
+  4 println
+end

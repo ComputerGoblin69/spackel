@@ -61,6 +61,10 @@ The program above will expand to `4 5 + println`, printing 9.
 Macros cannot be nested, but you can use a previously defined macro in the
 definition of a new macro.
 
+## Control flow
+
+- `then BODY end`: pops a boolean and runs `BODY` if it is true.
+
 ## Instructions
 
 ### Constants

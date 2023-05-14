@@ -52,6 +52,13 @@ impl Interpreter {
 
     fn interpret_instruction(&mut self, instruction: &Instruction) {
         match instruction {
+            Instruction::Then(body) => {
+                if self.pop_bool() {
+                    for instruction in &**body {
+                        self.interpret_instruction(instruction);
+                    }
+                }
+            }
             Instruction::Push(number) => self.push(Value::I32(*number)),
             Instruction::True => self.push(Value::Bool(true)),
             Instruction::False => self.push(Value::Bool(false)),
