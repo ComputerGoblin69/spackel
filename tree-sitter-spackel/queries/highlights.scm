@@ -3,6 +3,8 @@
 (number) @constant.numeric
 
 "macro" @keyword.function
+(then_statement "end" @keyword.control.conditional .)
+(then_else_statement "end" @keyword.control.conditional .)
 "end" @keyword
 [
   "then"
