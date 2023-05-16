@@ -9,6 +9,7 @@ mod stack;
 mod typ;
 
 use anyhow::{bail, ensure, Context, Result};
+use codemap::CodeMap;
 use std::path::Path;
 
 enum Command {
@@ -17,21 +18,24 @@ enum Command {
 }
 
 fn main() -> Result<()> {
-    let mut args = std::env::args_os().skip(1);
+    let mut args = std::env::args().skip(1);
     ensure!(args.len() < 3, "too many command line arguments");
 
     let command = args.next().context("no command provided")?;
-    let command = match command.to_str() {
-        Some("run") => Command::Run,
-        Some("compile") => Command::Compile,
+    let command = match &*command {
+        "run" => Command::Run,
+        "compile" => Command::Compile,
         _ => bail!("command must be `run` or `compile`, not {command:?}"),
     };
 
     let source_path = args.next().context("no file provided")?;
-    let source_code = std::fs::read_to_string(source_path)
+    let source_code = std::fs::read_to_string(&source_path)
         .context("failed to read source file")?;
 
-    let program = ir::Program::parse(&source_code)?;
+    let mut code_map = CodeMap::new();
+    let file = code_map.add_file(source_path, source_code);
+
+    let program = ir::Program::parse(&file)?;
     let program = typ::check(program)?;
 
     match command {

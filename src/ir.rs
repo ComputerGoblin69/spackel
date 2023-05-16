@@ -8,8 +8,8 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn parse(source_code: &str) -> Result<Self> {
-        let tokens = expand_macros(lex(source_code));
+    pub fn parse(file: &codemap::File) -> Result<Self> {
+        let tokens = expand_macros(lex(file));
         let (instructions, terminator) =
             process_results(tokens, |mut tokens| {
                 instructions_until_terminator(&mut tokens)
@@ -27,18 +27,18 @@ fn expand_macros<'a>(
 ) -> impl Iterator<Item = Result<Token<'a>>> {
     let mut macros = HashMap::new();
 
-    extra_iterators::batching_map(tokens, move |tokens, token| match token {
+    extra_iterators::batching_map(tokens, move |tokens, token| match &*token {
         "macro" => {
             let name = tokens.next().context("macro definition has no name")?;
             ensure!(
-                !is_keyword(name),
+                !is_keyword(&name),
                 "keyword `{name}` cannot be used as a macro name"
             );
             let mut found_end = false;
             let mut layers = 0_usize;
             let body = tokens
                 .by_ref()
-                .map_while(|token| match token {
+                .map_while(|token| match &*token {
                     "end" => {
                         if layers == 0 {
                             found_end = true;
@@ -56,7 +56,7 @@ fn expand_macros<'a>(
                         Some(Ok(vec![token]))
                     }
                     _ => Some(Ok(macros
-                        .get(token)
+                        .get(&*token)
                         .cloned()
                         .unwrap_or_else(|| vec![token]))),
                 })
@@ -64,12 +64,12 @@ fn expand_macros<'a>(
                 .collect::<Result<_>>()?;
             ensure!(found_end, "unterminated macro definition");
             ensure!(
-                macros.insert(name, body).is_none(),
+                macros.insert(name.text, body).is_none(),
                 "redefinition of macro `{name}`"
             );
             Ok(Vec::new())
         }
-        _ => Ok(macros.get(token).cloned().unwrap_or_else(|| vec![token])),
+        _ => Ok(macros.get(&*token).cloned().unwrap_or_else(|| vec![token])),
     })
     .flatten_ok()
 }
@@ -82,14 +82,14 @@ fn instructions_until_terminator<'a>(
         let Some(token) = tokens.next() else {
             return Ok(None);
         };
-        Ok(Some(match token {
+        Ok(Some(match &*token {
             "end" | "else" => {
                 terminator = Some(token);
                 return Ok(None);
             }
             "then" => {
                 let (body, terminator) = instructions_until_terminator(tokens)?;
-                match terminator {
+                match terminator.map(|t| t.text) {
                     Some("end") => Instruction::Then(body),
                     None => bail!("unterminated `then` statement"),
                     Some("else") => {
