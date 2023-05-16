@@ -2,6 +2,7 @@
 #![warn(clippy::nursery, clippy::pedantic)]
 
 mod compiler;
+mod diagnostics;
 mod interpreter;
 mod ir;
 mod lexer;
@@ -10,14 +11,29 @@ mod typ;
 
 use anyhow::{bail, ensure, Context, Result};
 use codemap::CodeMap;
-use std::path::Path;
+use std::{path::Path, process::ExitCode};
 
 enum Command {
     Run,
     Compile,
 }
 
-fn main() -> Result<()> {
+fn main() -> Result<ExitCode> {
+    let mut code_map = CodeMap::new();
+
+    #[allow(clippy::option_if_let_else)] // `else` consumes `err`
+    real_main(&mut code_map)
+        .map(|()| ExitCode::SUCCESS)
+        .or_else(|err| {
+            if let Some(diagnostic) = err.downcast_ref::<diagnostics::Error>() {
+                Ok(diagnostic.emit(&code_map))
+            } else {
+                Err(err)
+            }
+        })
+}
+
+fn real_main(code_map: &mut CodeMap) -> Result<()> {
     let mut args = std::env::args().skip(1);
     ensure!(args.len() < 3, "too many command line arguments");
 
@@ -31,8 +47,6 @@ fn main() -> Result<()> {
     let source_path = args.next().context("no file provided")?;
     let source_code = std::fs::read_to_string(&source_path)
         .context("failed to read source file")?;
-
-    let mut code_map = CodeMap::new();
     let file = code_map.add_file(source_path, source_code);
 
     let program = ir::Program::parse(&file)?;
