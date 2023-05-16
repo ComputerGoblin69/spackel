@@ -66,7 +66,7 @@ fn expand_macros<'a>(
                 })
                 .flatten_ok()
                 .collect::<Result<_>>()?;
-            ensure!(found_end, "unterminated macro definition");
+            ensure!(found_end, unterminated("macro definition", token));
             ensure!(
                 macros.insert(name.text, body).is_none(),
                 "redefinition of macro `{name}`"
@@ -95,13 +95,18 @@ fn instructions_until_terminator<'a>(
                 let (body, terminator) = instructions_until_terminator(tokens)?;
                 match terminator.map(|t| t.text) {
                     Some("end") => Instruction::Then(body),
-                    None => bail!("unterminated `then` statement"),
+                    None => bail!(unterminated("`then` statement", token)),
                     Some("else") => {
                         let (else_, terminator) =
                             instructions_until_terminator(tokens)?;
                         match terminator {
-                            Some("end") => Instruction::ThenElse(body, else_),
-                            None => bail!("unterminated `then else` statement"),
+                            Some(t) if &*t == "end" => {
+                                Instruction::ThenElse(body, else_)
+                            }
+                            None => bail!(unterminated(
+                                "`then else` statement",
+                                token,
+                            )),
                             Some(terminator) => {
                                 bail!(unexpected_token(terminator))
                             }
@@ -218,6 +223,21 @@ fn unexpected_token(token: Token) -> diagnostics::Error {
     diagnostics::Error(Diagnostic {
         level: Level::Error,
         message: format!("unexpected `{token}`"),
+        code: None,
+        spans: vec![SpanLabel {
+            span: token.span,
+            label: None,
+            style: SpanStyle::Primary,
+        }],
+    })
+}
+
+fn unterminated(thing: &str, token: Token) -> diagnostics::Error {
+    use codemap_diagnostic::{Level, SpanLabel, SpanStyle};
+
+    diagnostics::Error(Diagnostic {
+        level: Level::Error,
+        message: format!("unterminated {thing}"),
         code: None,
         spans: vec![SpanLabel {
             span: token.span,
