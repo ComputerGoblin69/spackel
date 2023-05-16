@@ -1,5 +1,9 @@
-use crate::lexer::{lex, Token};
+use crate::{
+    diagnostics,
+    lexer::{lex, Token},
+};
 use anyhow::{anyhow, bail, ensure, Context, Result};
+use codemap_diagnostic::Diagnostic;
 use itertools::{process_results, Itertools};
 use std::{collections::HashMap, str::FromStr};
 
@@ -15,7 +19,7 @@ impl Program {
                 instructions_until_terminator(&mut tokens)
             })??;
         if let Some(terminator) = terminator {
-            bail!("unexpected `{terminator}`");
+            bail!(unexpected_token(terminator));
         }
 
         Ok(Self { instructions })
@@ -99,7 +103,7 @@ fn instructions_until_terminator<'a>(
                             Some("end") => Instruction::ThenElse(body, else_),
                             None => bail!("unterminated `then else` statement"),
                             Some(terminator) => {
-                                bail!("unexpected `{terminator}`")
+                                bail!(unexpected_token(terminator))
                             }
                         }
                     }
@@ -206,4 +210,19 @@ pub enum BinLogicOp {
     Nand,
     Nor,
     Xnor,
+}
+
+fn unexpected_token(token: Token) -> diagnostics::Error {
+    use codemap_diagnostic::{Level, SpanLabel, SpanStyle};
+
+    diagnostics::Error(Diagnostic {
+        level: Level::Error,
+        message: format!("unexpected `{token}`"),
+        code: None,
+        spans: vec![SpanLabel {
+            span: token.span,
+            label: None,
+            style: SpanStyle::Primary,
+        }],
+    })
 }
