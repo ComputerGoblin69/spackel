@@ -16,6 +16,8 @@ impl fmt::Display for Error {
     }
 }
 
+impl std::error::Error for Error {}
+
 impl Error {
     pub fn emit(&self, code_map: &CodeMap) -> ExitCode {
         let mut emitter = Emitter::stderr(ColorConfig::Auto, Some(code_map));

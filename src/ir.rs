@@ -5,7 +5,7 @@ use crate::{
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use codemap_diagnostic::Diagnostic;
 use itertools::{process_results, Itertools};
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
 
 pub struct Program {
     pub instructions: Box<[Instruction]>,
@@ -115,7 +115,7 @@ fn instructions_until_terminator<'a>(
                     _ => unreachable!(),
                 }
             }
-            _ => token.parse()?,
+            _ => token.try_into()?,
         }))
     })
     .collect::<Result<_>>()?;
@@ -148,11 +148,13 @@ pub enum Instruction {
     Tuck,
 }
 
-impl FromStr for Instruction {
-    type Err = anyhow::Error;
+impl TryFrom<Token<'_>> for Instruction {
+    type Error = anyhow::Error;
 
-    fn from_str(word: &str) -> Result<Self> {
-        Ok(match word {
+    fn try_from(token: Token<'_>) -> Result<Self> {
+        use codemap_diagnostic::{Level, SpanLabel, SpanStyle};
+
+        Ok(match &*token {
             "true" => Self::True,
             "false" => Self::False,
             "print" => Self::Print,
@@ -183,10 +185,18 @@ impl FromStr for Instruction {
             "over" => Self::Over,
             "nip" => Self::Nip,
             "tuck" => Self::Tuck,
-            _ => Self::Push(
-                word.parse()
-                    .map_err(|_| anyhow!("unknown instruction: `{word}`"))?,
-            ),
+            _ => Self::Push(token.parse().map_err(|_| {
+                diagnostics::Error(Diagnostic {
+                    level: Level::Error,
+                    message: format!("unknown instruction: `{token}`"),
+                    code: None,
+                    spans: vec![SpanLabel {
+                        span: token.span,
+                        label: None,
+                        style: SpanStyle::Primary,
+                    }],
+                })
+            })?),
         })
     }
 }
