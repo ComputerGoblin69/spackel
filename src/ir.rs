@@ -3,7 +3,6 @@ use crate::{
     lexer::{lex, Token},
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
-use codemap_diagnostic::Diagnostic;
 use itertools::{process_results, Itertools};
 use std::collections::HashMap;
 
@@ -152,7 +151,7 @@ impl TryFrom<Token<'_>> for Instruction {
     type Error = anyhow::Error;
 
     fn try_from(token: Token<'_>) -> Result<Self> {
-        use codemap_diagnostic::{Level, SpanLabel, SpanStyle};
+        use codemap_diagnostic::{SpanLabel, SpanStyle};
 
         Ok(match &*token {
             "true" => Self::True,
@@ -186,16 +185,14 @@ impl TryFrom<Token<'_>> for Instruction {
             "nip" => Self::Nip,
             "tuck" => Self::Tuck,
             _ => Self::Push(token.parse().map_err(|_| {
-                diagnostics::Error(Diagnostic {
-                    level: Level::Error,
-                    message: format!("unknown instruction: `{token}`"),
-                    code: None,
-                    spans: vec![SpanLabel {
+                diagnostics::error(
+                    format!("unknown instruction: `{token}`"),
+                    vec![SpanLabel {
                         span: token.span,
                         label: None,
                         style: SpanStyle::Primary,
                     }],
-                })
+                )
             })?),
         })
     }
@@ -228,31 +225,27 @@ pub enum BinLogicOp {
 }
 
 fn unexpected_token(token: Token) -> diagnostics::Error {
-    use codemap_diagnostic::{Level, SpanLabel, SpanStyle};
+    use codemap_diagnostic::{SpanLabel, SpanStyle};
 
-    diagnostics::Error(Diagnostic {
-        level: Level::Error,
-        message: format!("unexpected `{token}`"),
-        code: None,
-        spans: vec![SpanLabel {
+    diagnostics::error(
+        format!("unexpected `{token}`"),
+        vec![SpanLabel {
             span: token.span,
             label: None,
             style: SpanStyle::Primary,
         }],
-    })
+    )
 }
 
 fn unterminated(thing: &str, token: Token) -> diagnostics::Error {
-    use codemap_diagnostic::{Level, SpanLabel, SpanStyle};
+    use codemap_diagnostic::{SpanLabel, SpanStyle};
 
-    diagnostics::Error(Diagnostic {
-        level: Level::Error,
-        message: format!("unterminated {thing}"),
-        code: None,
-        spans: vec![SpanLabel {
+    diagnostics::error(
+        format!("unterminated {thing}"),
+        vec![SpanLabel {
             span: token.span,
             label: None,
             style: SpanStyle::Primary,
         }],
-    })
+    )
 }

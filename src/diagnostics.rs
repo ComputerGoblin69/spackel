@@ -1,5 +1,5 @@
 use codemap::CodeMap;
-use codemap_diagnostic::{ColorConfig, Emitter};
+use codemap_diagnostic::{ColorConfig, Emitter, SpanLabel};
 use std::{fmt, process::ExitCode};
 
 pub struct Error(pub codemap_diagnostic::Diagnostic);
@@ -24,4 +24,13 @@ impl Error {
         emitter.emit(std::slice::from_ref(&self.0));
         ExitCode::FAILURE
     }
+}
+
+pub const fn error(message: String, spans: Vec<SpanLabel>) -> Error {
+    Error(codemap_diagnostic::Diagnostic {
+        level: codemap_diagnostic::Level::Error,
+        message,
+        code: None,
+        spans,
+    })
 }
