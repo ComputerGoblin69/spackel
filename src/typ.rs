@@ -38,7 +38,7 @@ struct Checker {
 
 impl Checker {
     fn check(&mut self, program: Program) -> Result<Checked<Program>> {
-        for instruction in &*program.instructions {
+        for (_token, instruction) in &*program.instructions {
             self.check_instruction(instruction)?;
         }
         ensure!(
@@ -101,7 +101,7 @@ impl Checker {
         match instruction {
             Instruction::Then(body) => {
                 let before = self.stack.clone();
-                for instruction in &**body {
+                for (_token, instruction) in &**body {
                     self.check_instruction(instruction)?;
                 }
                 ensure!(
@@ -113,11 +113,11 @@ impl Checker {
             }
             Instruction::ThenElse(then, else_) => {
                 let before = self.stack.clone();
-                for instruction in &**then {
+                for (_token, instruction) in &**then {
                     self.check_instruction(instruction)?;
                 }
                 let then_types = std::mem::replace(&mut self.stack, before);
-                for instruction in &**else_ {
+                for (_token, instruction) in &**else_ {
                     self.check_instruction(instruction)?;
                 }
                 ensure!(

@@ -3,6 +3,7 @@ use crate::{
     stack::Stack,
 };
 use anyhow::Result;
+use codemap::Span;
 use cranelift::prelude::{
     codegen::{
         ir::{Function, Inst, UserFuncName},
@@ -147,7 +148,7 @@ impl Compiler {
     }
 
     fn compile(&mut self, program: &Program, fb: &mut FunctionBuilder) {
-        for instruction in &*program.instructions {
+        for (_span, instruction) in &*program.instructions {
             self.compile_instruction(instruction, fb);
         }
         let exit_code = fb.ins().iconst(I32, 0);
@@ -246,7 +247,11 @@ impl Compiler {
         }
     }
 
-    fn compile_then(&mut self, body: &[Instruction], fb: &mut FunctionBuilder) {
+    fn compile_then(
+        &mut self,
+        body: &[(Span, Instruction)],
+        fb: &mut FunctionBuilder,
+    ) {
         let then = fb.create_block();
         let after = fb.create_block();
 
@@ -263,7 +268,7 @@ impl Compiler {
             .collect();
 
         fb.switch_to_block(then);
-        for instruction in body {
+        for (_span, instruction) in body {
             self.compile_instruction(instruction, fb);
         }
         fb.ins().jump(after, &self.stack);
@@ -275,8 +280,8 @@ impl Compiler {
 
     fn compile_then_else(
         &mut self,
-        then: &[Instruction],
-        else_: &[Instruction],
+        then: &[(Span, Instruction)],
+        else_: &[(Span, Instruction)],
         fb: &mut FunctionBuilder,
     ) {
         let then_block = fb.create_block();
@@ -290,7 +295,7 @@ impl Compiler {
 
         let params_before = self.stack.clone();
         fb.switch_to_block(then_block);
-        for instruction in then {
+        for (_span, instruction) in then {
             self.compile_instruction(instruction, fb);
         }
         let params_after = self
@@ -307,7 +312,7 @@ impl Compiler {
 
         fb.switch_to_block(else_block);
         self.stack = params_before;
-        for instruction in else_ {
+        for (_span, instruction) in else_ {
             self.compile_instruction(instruction, fb);
         }
         fb.ins().jump(after_block, &self.stack);

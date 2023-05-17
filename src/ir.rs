@@ -3,11 +3,12 @@ use crate::{
     lexer::{lex, Token},
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
+use codemap::Span;
 use itertools::{process_results, Itertools};
 use std::collections::HashMap;
 
 pub struct Program {
-    pub instructions: Box<[Instruction]>,
+    pub instructions: Block,
 }
 
 impl Program {
@@ -79,7 +80,7 @@ fn expand_macros<'a>(
 
 fn instructions_until_terminator<'a>(
     tokens: &mut impl Iterator<Item = Token<'a>>,
-) -> Result<(Box<[Instruction]>, Option<Token<'a>>)> {
+) -> Result<(Block, Option<Token<'a>>)> {
     let mut terminator = None;
     let instructions = extra_iterators::try_from_fn(|| {
         let Some(token) = tokens.next() else {
@@ -92,16 +93,19 @@ fn instructions_until_terminator<'a>(
             }
             "then" => {
                 let (body, terminator) = instructions_until_terminator(tokens)?;
-                match terminator.map(|t| t.text) {
-                    Some("end") => Instruction::Then(body),
+                match terminator {
+                    Some(t) if &*t == "end" => {
+                        (token.span.merge(t.span), Instruction::Then(body))
+                    }
                     None => bail!(unterminated("`then` statement", token)),
-                    Some("else") => {
+                    Some(t) if &*t == "else" => {
                         let (else_, terminator) =
                             instructions_until_terminator(tokens)?;
                         match terminator {
-                            Some(t) if &*t == "end" => {
-                                Instruction::ThenElse(body, else_)
-                            }
+                            Some(t) if &*t == "end" => (
+                                token.span.merge(t.span),
+                                Instruction::ThenElse(body, else_),
+                            ),
                             None => bail!(unterminated(
                                 "`then else` statement",
                                 token,
@@ -114,7 +118,7 @@ fn instructions_until_terminator<'a>(
                     _ => unreachable!(),
                 }
             }
-            _ => token.try_into()?,
+            _ => (token.span, token.try_into()?),
         }))
     })
     .collect::<Result<_>>()?;
@@ -126,9 +130,11 @@ fn is_keyword(token: &str) -> bool {
     matches!(token, "macro" | "then" | "else" | "end")
 }
 
+type Block = Box<[(Span, Instruction)]>;
+
 pub enum Instruction {
-    Then(Box<[Instruction]>),
-    ThenElse(Box<[Instruction]>, Box<[Instruction]>),
+    Then(Block),
+    ThenElse(Block, Block),
     Push(i32),
     True,
     False,

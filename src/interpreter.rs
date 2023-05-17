@@ -31,7 +31,7 @@ impl Stack for Interpreter {
 
 impl Interpreter {
     fn interpret(&mut self, program: &Program) {
-        for instruction in &*program.instructions {
+        for (_span, instruction) in &*program.instructions {
             self.interpret_instruction(instruction);
         }
     }
@@ -54,13 +54,14 @@ impl Interpreter {
         match instruction {
             Instruction::Then(body) => {
                 if self.pop_bool() {
-                    for instruction in &**body {
+                    for (_span, instruction) in &**body {
                         self.interpret_instruction(instruction);
                     }
                 }
             }
             Instruction::ThenElse(then, else_) => {
-                for instruction in &**if self.pop_bool() { then } else { else_ }
+                for (_span, instruction) in
+                    &**if self.pop_bool() { then } else { else_ }
                 {
                     self.interpret_instruction(instruction);
                 }
