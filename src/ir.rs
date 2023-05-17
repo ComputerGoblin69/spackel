@@ -2,8 +2,9 @@ use crate::{
     diagnostics,
     lexer::{lex, Token},
 };
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{bail, ensure, Result};
 use codemap::Span;
+use codemap_diagnostic::{SpanLabel, SpanStyle};
 use itertools::{process_results, Itertools};
 use std::collections::HashMap;
 
@@ -33,10 +34,26 @@ fn expand_macros<'a>(
 
     extra_iterators::batching_map(tokens, move |tokens, token| match &*token {
         "macro" => {
-            let name = tokens.next().context("macro definition has no name")?;
+            let name = tokens.next().ok_or_else(|| {
+                diagnostics::error(
+                    "macro definition has no name".to_owned(),
+                    vec![SpanLabel {
+                        span: token.span,
+                        label: None,
+                        style: SpanStyle::Primary,
+                    }],
+                )
+            })?;
             ensure!(
                 !is_keyword(&name),
-                "keyword `{name}` cannot be used as a macro name"
+                diagnostics::error(
+                    format!("keyword `{name}` cannot be used as a macro name"),
+                    vec![SpanLabel {
+                        span: name.span,
+                        label: None,
+                        style: SpanStyle::Primary,
+                    }],
+                ),
             );
             let mut found_end = false;
             let mut layers = 0_usize;
@@ -52,9 +69,15 @@ fn expand_macros<'a>(
                             Some(Ok(vec![token]))
                         }
                     }
-                    "macro" => {
-                        Some(Err(anyhow!("nested macros are not supported")))
-                    }
+                    "macro" => Some(Err(diagnostics::error(
+                        "nested macros are not supported".to_owned(),
+                        vec![SpanLabel {
+                            span: token.span,
+                            label: None,
+                            style: SpanStyle::Primary,
+                        }],
+                    )
+                    .into())),
                     "then" => {
                         layers += 1;
                         Some(Ok(vec![token]))
@@ -168,8 +191,6 @@ impl TryFrom<Token<'_>> for Instruction {
     type Error = anyhow::Error;
 
     fn try_from(token: Token<'_>) -> Result<Self> {
-        use codemap_diagnostic::{SpanLabel, SpanStyle};
-
         Ok(match &*token {
             "true" => Self::True,
             "false" => Self::False,
@@ -242,8 +263,6 @@ pub enum BinLogicOp {
 }
 
 fn unexpected_token(token: Token) -> diagnostics::Error {
-    use codemap_diagnostic::{SpanLabel, SpanStyle};
-
     diagnostics::error(
         format!("unexpected `{token}`"),
         vec![SpanLabel {
@@ -255,8 +274,6 @@ fn unexpected_token(token: Token) -> diagnostics::Error {
 }
 
 fn unterminated(thing: &str, token: Token) -> diagnostics::Error {
-    use codemap_diagnostic::{SpanLabel, SpanStyle};
-
     diagnostics::error(
         format!("unterminated {thing}"),
         vec![SpanLabel {
