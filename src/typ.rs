@@ -3,7 +3,7 @@ use crate::{
     ir::{Instruction, Program},
 };
 use anyhow::{ensure, Result};
-use codemap::Span;
+use codemap::{Span, Spanned};
 use itertools::Itertools;
 use std::{fmt, ops::Deref};
 
@@ -42,8 +42,8 @@ struct Checker {
 
 impl Checker {
     fn check(&mut self, program: Program) -> Result<Checked<Program>> {
-        for (span, instruction) in &*program.instructions {
-            self.check_instruction(instruction, *span)?;
+        for instruction in &*program.instructions {
+            self.check_instruction(instruction)?;
         }
         ensure!(
             self.stack.is_empty(),
@@ -86,14 +86,14 @@ impl Checker {
 
     fn check_instruction(
         &mut self,
-        instruction: &Instruction,
-        span: Span,
+        instruction: &Spanned<Instruction>,
     ) -> Result<()> {
         use Parameter::{Any, Concrete as P};
         use Return::{Concrete as R, Get};
         use Type::{Bool, I32};
 
-        let (inputs, outputs): (&[Parameter], &[Return]) = match instruction {
+        let (inputs, outputs): (&[Parameter], &[Return]) = match &**instruction
+        {
             Instruction::Then(_) | Instruction::ThenElse(..) => {
                 (&[P(Bool)], &[])
             }
@@ -113,13 +113,13 @@ impl Checker {
             Instruction::Nip => (&[Any; 2], &[Get(1)]),
             Instruction::Tuck => (&[Any; 2], &[Get(1), Get(0), Get(1)]),
         };
-        self.transform(inputs, outputs, span)?;
+        self.transform(inputs, outputs, instruction.span)?;
 
-        match instruction {
+        match &**instruction {
             Instruction::Then(body) => {
                 let before = self.stack.clone();
-                for (span, instruction) in &**body {
-                    self.check_instruction(instruction, *span)?;
+                for instruction in &**body {
+                    self.check_instruction(instruction)?;
                 }
                 ensure!(
                     before == self.stack,
@@ -129,18 +129,18 @@ impl Checker {
                             before.iter().format(" "),
                             self.stack.iter().format(" "),
                         ),
-                        vec![primary_label(span, None)],
+                        vec![primary_label(instruction.span, None)],
                     ),
                 );
             }
             Instruction::ThenElse(then, else_) => {
                 let before = self.stack.clone();
-                for (span, instruction) in &**then {
-                    self.check_instruction(instruction, *span)?;
+                for instruction in &**then {
+                    self.check_instruction(instruction)?;
                 }
                 let then_types = std::mem::replace(&mut self.stack, before);
-                for (span, instruction) in &**else_ {
-                    self.check_instruction(instruction, *span)?;
+                for instruction in &**else_ {
+                    self.check_instruction(instruction)?;
                 }
                 ensure!(
                     then_types == self.stack,
@@ -150,7 +150,7 @@ impl Checker {
                             then_types.iter().format(" "),
                             self.stack.iter().format(" "),
                         ),
-                        vec![primary_label(span, None)],
+                        vec![primary_label(instruction.span, None)],
                     ),
                 );
             }

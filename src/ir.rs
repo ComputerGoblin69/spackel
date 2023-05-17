@@ -3,7 +3,7 @@ use crate::{
     lexer::{lex, Token},
 };
 use anyhow::{bail, ensure, Result};
-use codemap::Span;
+use codemap::Spanned;
 use itertools::{process_results, Itertools};
 use std::collections::HashMap;
 
@@ -115,18 +115,19 @@ fn instructions_until_terminator<'a>(
             "then" => {
                 let (body, terminator) = instructions_until_terminator(tokens)?;
                 match terminator {
-                    Some(t) if &*t == "end" => {
-                        (token.span.merge(t.span), Instruction::Then(body))
-                    }
+                    Some(t) if &*t == "end" => Spanned {
+                        span: token.span.merge(t.span),
+                        node: Instruction::Then(body),
+                    },
                     None => bail!(unterminated("`then` statement", token)),
                     Some(t) if &*t == "else" => {
                         let (else_, terminator) =
                             instructions_until_terminator(tokens)?;
                         match terminator {
-                            Some(t) if &*t == "end" => (
-                                token.span.merge(t.span),
-                                Instruction::ThenElse(body, else_),
-                            ),
+                            Some(t) if &*t == "end" => Spanned {
+                                span: token.span.merge(t.span),
+                                node: Instruction::ThenElse(body, else_),
+                            },
                             None => bail!(unterminated(
                                 "`then else` statement",
                                 token,
@@ -139,7 +140,10 @@ fn instructions_until_terminator<'a>(
                     _ => unreachable!(),
                 }
             }
-            _ => (token.span, token.try_into()?),
+            _ => Spanned {
+                span: token.span,
+                node: token.try_into()?,
+            },
         }))
     })
     .collect::<Result<_>>()?;
@@ -151,7 +155,7 @@ fn is_keyword(token: &str) -> bool {
     matches!(token, "macro" | "then" | "else" | "end")
 }
 
-type Block = Box<[(Span, Instruction)]>;
+type Block = Box<[Spanned<Instruction>]>;
 
 pub enum Instruction {
     Then(Block),
