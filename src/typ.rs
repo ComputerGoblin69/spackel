@@ -1,5 +1,10 @@
-use crate::ir::{Instruction, Program};
+use crate::{
+    diagnostics,
+    ir::{Instruction, Program},
+};
 use anyhow::{ensure, Result};
+use codemap::Span;
+use codemap_diagnostic::{SpanLabel, SpanStyle};
 use itertools::Itertools;
 use std::{fmt, ops::Deref};
 
@@ -38,8 +43,8 @@ struct Checker {
 
 impl Checker {
     fn check(&mut self, program: Program) -> Result<Checked<Program>> {
-        for (_token, instruction) in &*program.instructions {
-            self.check_instruction(instruction)?;
+        for (span, instruction) in &*program.instructions {
+            self.check_instruction(instruction, *span)?;
         }
         ensure!(
             self.stack.is_empty(),
@@ -71,7 +76,11 @@ impl Checker {
         Ok(())
     }
 
-    fn check_instruction(&mut self, instruction: &Instruction) -> Result<()> {
+    fn check_instruction(
+        &mut self,
+        instruction: &Instruction,
+        span: Span,
+    ) -> Result<()> {
         use Parameter::{Any, Concrete as P};
         use Return::{Concrete as R, Get};
         use Type::{Bool, I32};
@@ -101,30 +110,48 @@ impl Checker {
         match instruction {
             Instruction::Then(body) => {
                 let before = self.stack.clone();
-                for (_token, instruction) in &**body {
-                    self.check_instruction(instruction)?;
+                for (span, instruction) in &**body {
+                    self.check_instruction(instruction, *span)?;
                 }
                 ensure!(
                     before == self.stack,
-                    "`then` statement changes types from `{}` to `{}`",
-                    before.iter().format(" "),
-                    self.stack.iter().format(" "),
+                    diagnostics::error(
+                        format!(
+                            "`then` statement changes types from `{}` to `{}`",
+                            before.iter().format(" "),
+                            self.stack.iter().format(" "),
+                        ),
+                        vec![SpanLabel {
+                            span,
+                            label: None,
+                            style: SpanStyle::Primary
+                        }]
+                    ),
                 );
             }
             Instruction::ThenElse(then, else_) => {
                 let before = self.stack.clone();
-                for (_token, instruction) in &**then {
-                    self.check_instruction(instruction)?;
+                for (span, instruction) in &**then {
+                    self.check_instruction(instruction, *span)?;
                 }
                 let then_types = std::mem::replace(&mut self.stack, before);
-                for (_token, instruction) in &**else_ {
-                    self.check_instruction(instruction)?;
+                for (span, instruction) in &**else_ {
+                    self.check_instruction(instruction, *span)?;
                 }
                 ensure!(
                     then_types == self.stack,
-                    "`then else` statement diverges between types `{}` and `{}`",
-                    then_types.iter().format(" "),
-                    self.stack.iter().format(" "),
+                    diagnostics::error(
+                        format!(
+                            "`then else` statement diverges between types `{}` and `{}`",
+                            then_types.iter().format(" "),
+                            self.stack.iter().format(" "),
+                        ),
+                        vec![SpanLabel {
+                            span,
+                            label: None,
+                            style: SpanStyle::Primary
+                        }]
+                    ),
                 );
             }
             _ => {}
