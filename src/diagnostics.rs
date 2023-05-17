@@ -1,5 +1,5 @@
-use codemap::CodeMap;
-use codemap_diagnostic::{ColorConfig, Emitter, SpanLabel};
+use codemap::{CodeMap, Span};
+use codemap_diagnostic::{ColorConfig, Emitter, SpanLabel, SpanStyle};
 use std::{fmt, process::ExitCode};
 
 pub struct Error(pub codemap_diagnostic::Diagnostic);
@@ -33,4 +33,15 @@ pub const fn error(message: String, spans: Vec<SpanLabel>) -> Error {
         code: None,
         spans,
     })
+}
+
+pub fn primary_label(
+    span: Span,
+    label: impl Into<Option<String>>,
+) -> SpanLabel {
+    SpanLabel {
+        span,
+        label: label.into(),
+        style: SpanStyle::Primary,
+    }
 }

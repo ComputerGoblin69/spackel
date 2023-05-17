@@ -1,10 +1,9 @@
 use crate::{
-    diagnostics,
+    diagnostics::{self, primary_label},
     lexer::{lex, Token},
 };
 use anyhow::{bail, ensure, Result};
 use codemap::Span;
-use codemap_diagnostic::{SpanLabel, SpanStyle};
 use itertools::{process_results, Itertools};
 use std::collections::HashMap;
 
@@ -37,22 +36,14 @@ fn expand_macros<'a>(
             let name = tokens.next().ok_or_else(|| {
                 diagnostics::error(
                     "macro definition has no name".to_owned(),
-                    vec![SpanLabel {
-                        span: token.span,
-                        label: None,
-                        style: SpanStyle::Primary,
-                    }],
+                    vec![primary_label(token.span, None)],
                 )
             })?;
             ensure!(
                 !is_keyword(&name),
                 diagnostics::error(
                     format!("keyword `{name}` cannot be used as a macro name"),
-                    vec![SpanLabel {
-                        span: name.span,
-                        label: None,
-                        style: SpanStyle::Primary,
-                    }],
+                    vec![primary_label(name.span, None)],
                 ),
             );
             let mut found_end = false;
@@ -71,11 +62,7 @@ fn expand_macros<'a>(
                     }
                     "macro" => Some(Err(diagnostics::error(
                         "nested macros are not supported".to_owned(),
-                        vec![SpanLabel {
-                            span: token.span,
-                            label: None,
-                            style: SpanStyle::Primary,
-                        }],
+                        vec![primary_label(token.span, None)],
                     )
                     .into())),
                     "then" => {
@@ -225,11 +212,7 @@ impl TryFrom<Token<'_>> for Instruction {
             _ => Self::Push(token.parse().map_err(|_| {
                 diagnostics::error(
                     format!("unknown instruction: `{token}`"),
-                    vec![SpanLabel {
-                        span: token.span,
-                        label: None,
-                        style: SpanStyle::Primary,
-                    }],
+                    vec![primary_label(token.span, None)],
                 )
             })?),
         })
@@ -265,21 +248,13 @@ pub enum BinLogicOp {
 fn unexpected_token(token: Token) -> diagnostics::Error {
     diagnostics::error(
         format!("unexpected `{token}`"),
-        vec![SpanLabel {
-            span: token.span,
-            label: None,
-            style: SpanStyle::Primary,
-        }],
+        vec![primary_label(token.span, None)],
     )
 }
 
 fn unterminated(thing: &str, token: Token) -> diagnostics::Error {
     diagnostics::error(
         format!("unterminated {thing}"),
-        vec![SpanLabel {
-            span: token.span,
-            label: None,
-            style: SpanStyle::Primary,
-        }],
+        vec![primary_label(token.span, None)],
     )
 }

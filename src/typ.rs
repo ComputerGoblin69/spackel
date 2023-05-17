@@ -1,10 +1,9 @@
 use crate::{
-    diagnostics,
+    diagnostics::{self, primary_label},
     ir::{Instruction, Program},
 };
 use anyhow::{ensure, Result};
 use codemap::Span;
-use codemap_diagnostic::{SpanLabel, SpanStyle};
 use itertools::Itertools;
 use std::{fmt, ops::Deref};
 
@@ -65,15 +64,14 @@ impl Checker {
                 && self.stack[self.stack.len() - inputs.len()..] == *inputs),
             diagnostics::error(
                 "type mismatch".to_owned(),
-                vec![SpanLabel {
+                vec![primary_label(
                     span,
-                    label: Some(format!(
+                    format!(
                         "expected types `{}` but got `{}`",
                         inputs.iter().format(" "),
                         self.stack.iter().format(" ")
-                    )),
-                    style: SpanStyle::Primary
-                }]
+                    )
+                )],
             ),
         );
         let new_len = self.stack.len() - inputs.len();
@@ -131,11 +129,7 @@ impl Checker {
                             before.iter().format(" "),
                             self.stack.iter().format(" "),
                         ),
-                        vec![SpanLabel {
-                            span,
-                            label: None,
-                            style: SpanStyle::Primary
-                        }]
+                        vec![primary_label(span, None)],
                     ),
                 );
             }
@@ -156,11 +150,7 @@ impl Checker {
                             then_types.iter().format(" "),
                             self.stack.iter().format(" "),
                         ),
-                        vec![SpanLabel {
-                            span,
-                            label: None,
-                            style: SpanStyle::Primary
-                        }]
+                        vec![primary_label(span, None)],
                     ),
                 );
             }
