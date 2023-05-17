@@ -58,13 +58,23 @@ impl Checker {
         &mut self,
         inputs: &[Parameter],
         outputs: &[Return],
+        span: Span,
     ) -> Result<()> {
         ensure!(
             (self.stack.len() >= inputs.len()
                 && self.stack[self.stack.len() - inputs.len()..] == *inputs),
-            "expected types `{}` but got `{}`",
-            inputs.iter().format(" "),
-            self.stack.iter().format(" ")
+            diagnostics::error(
+                "type mismatch".to_owned(),
+                vec![SpanLabel {
+                    span,
+                    label: Some(format!(
+                        "expected types `{}` but got `{}`",
+                        inputs.iter().format(" "),
+                        self.stack.iter().format(" ")
+                    )),
+                    style: SpanStyle::Primary
+                }]
+            ),
         );
         let new_len = self.stack.len() - inputs.len();
         let consumed = self.stack.split_off(new_len);
@@ -105,7 +115,7 @@ impl Checker {
             Instruction::Nip => (&[Any; 2], &[Get(1)]),
             Instruction::Tuck => (&[Any; 2], &[Get(1), Get(0), Get(1)]),
         };
-        self.transform(inputs, outputs)?;
+        self.transform(inputs, outputs, span)?;
 
         match instruction {
             Instruction::Then(body) => {
