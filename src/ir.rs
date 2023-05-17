@@ -73,7 +73,18 @@ fn expand_macros<'a>(
             );
             Ok(Vec::new())
         }
-        _ => Ok(macros.get(&*token).cloned().unwrap_or_else(|| vec![token])),
+        _ => Ok(macros.get(&*token).map_or_else(
+            || vec![token],
+            |body| {
+                body.iter()
+                    .copied()
+                    .map(|body_token| Token {
+                        span: token.span,
+                        ..body_token
+                    })
+                    .collect()
+            },
+        )),
     })
     .flatten_ok()
 }
