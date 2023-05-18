@@ -148,30 +148,28 @@ fn instructions_until_terminator<'a>(
             }
             "then" => {
                 let (body, terminator) = instructions_until_terminator(tokens)?;
-                match terminator {
-                    Some(t) if &*t == "end" => Spanned {
-                        span: token.span.merge(t.span),
+                let terminator = terminator
+                    .ok_or_else(|| unterminated("`then` statement", token))?;
+                match &*terminator {
+                    "end" => Spanned {
+                        span: token.span.merge(terminator.span),
                         node: Instruction::Then(body),
                     },
-                    None => bail!(unterminated("`then` statement", token)),
-                    Some(t) if &*t == "else" => {
+                    "else" => {
                         let (else_, terminator) =
                             instructions_until_terminator(tokens)?;
-                        match terminator {
-                            Some(t) if &*t == "end" => Spanned {
-                                span: token.span.merge(t.span),
+                        let terminator = terminator.ok_or_else(|| {
+                            unterminated("`then else` statement", token)
+                        })?;
+                        match &*terminator {
+                            "end" => Spanned {
+                                span: token.span.merge(terminator.span),
                                 node: Instruction::ThenElse(body, else_),
                             },
-                            None => bail!(unterminated(
-                                "`then else` statement",
-                                token,
+                            _ => bail!(unexpected_token(
+                                terminator,
+                                "expected `end`".to_owned(),
                             )),
-                            Some(terminator) => {
-                                bail!(unexpected_token(
-                                    terminator,
-                                    "expected `end`".to_owned(),
-                                ))
-                            }
                         }
                     }
                     _ => unreachable!(),
