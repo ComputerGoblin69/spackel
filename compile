@@ -4,4 +4,4 @@ set -eu
 
 cargo run compile "$1"
 make
-cc -o main prelude.o main.o
+cc -o main runtime.o main.o
