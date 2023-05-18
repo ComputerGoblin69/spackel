@@ -1,5 +1,5 @@
 use crate::{
-    diagnostics::{self, primary_label},
+    diagnostics::{self, primary_label, secondary_label},
     lexer::{lex, Token},
 };
 use anyhow::{bail, ensure, Result};
@@ -33,6 +33,7 @@ fn expand_macros<'a>(
 
     extra_iterators::batching_map(tokens, move |tokens, token| match &*token {
         "macro" => {
+            let macro_token = token;
             let name = tokens.next().ok_or_else(|| {
                 diagnostics::error(
                     "macro definition has no name".to_owned(),
@@ -62,7 +63,16 @@ fn expand_macros<'a>(
                     }
                     "macro" => Some(Err(diagnostics::error(
                         "nested macros are not supported".to_owned(),
-                        vec![primary_label(token.span, None)],
+                        vec![
+                            primary_label(
+                                token.span,
+                                "inner macro starts here".to_owned(),
+                            ),
+                            secondary_label(
+                                macro_token.span,
+                                "outer macro starts here".to_owned(),
+                            ),
+                        ],
                     )
                     .into())),
                     "then" => {

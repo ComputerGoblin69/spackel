@@ -45,3 +45,14 @@ pub fn primary_label(
         style: SpanStyle::Primary,
     }
 }
+
+pub fn secondary_label(
+    span: Span,
+    label: impl Into<Option<String>>,
+) -> SpanLabel {
+    SpanLabel {
+        span,
+        label: label.into(),
+        style: SpanStyle::Secondary,
+    }
+}
