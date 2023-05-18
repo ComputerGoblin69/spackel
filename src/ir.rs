@@ -3,7 +3,7 @@ use crate::{
     lexer::{lex, Token},
 };
 use anyhow::{bail, ensure, Result};
-use codemap::Spanned;
+use codemap::{Span, Spanned};
 use itertools::{process_results, Itertools};
 use std::collections::HashMap;
 
@@ -79,27 +79,41 @@ fn expand_macros<'a>(
                         layers += 1;
                         Some(Ok(vec![token]))
                     }
-                    _ => Some(Ok(macros
-                        .get(&*token)
-                        .cloned()
-                        .unwrap_or_else(|| vec![token]))),
+                    _ => Some(Ok(macros.get(&*token).map_or_else(
+                        || vec![token],
+                        |macro_: &Macro| macro_.body.clone(),
+                    ))),
                 })
                 .flatten_ok()
                 .collect::<Result<_>>()?;
             ensure!(found_end, unterminated("macro definition", token));
-            ensure!(
-                macros.insert(name.text, body).is_none(),
-                diagnostics::error(
-                    format!("redefinition of macro `{name}`"),
-                    vec![primary_label(token.span, None)],
-                ),
+            let prev_definition = macros.insert(
+                name.text,
+                Macro {
+                    name_span: name.span,
+                    body,
+                },
             );
+            if let Some(prev_definition) = prev_definition {
+                bail!(diagnostics::error(
+                    format!("redefinition of macro `{name}`"),
+                    vec![
+                        primary_label(token.span, None),
+                        secondary_label(
+                            prev_definition.name_span,
+                            "previously defined here".to_owned(),
+                        )
+                    ],
+                ));
+            }
             Ok(Vec::new())
         }
         _ => Ok(macros.get(&*token).map_or_else(
             || vec![token],
-            |body| {
-                body.iter()
+            |macro_| {
+                macro_
+                    .body
+                    .iter()
                     .copied()
                     .map(|body_token| Token {
                         span: token.span,
@@ -110,6 +124,11 @@ fn expand_macros<'a>(
         )),
     })
     .flatten_ok()
+}
+
+struct Macro<'a> {
+    name_span: Span,
+    body: Vec<Token<'a>>,
 }
 
 fn instructions_until_terminator<'a>(
