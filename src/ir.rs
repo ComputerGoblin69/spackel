@@ -19,7 +19,10 @@ impl Program {
                 instructions_until_terminator(&mut tokens)
             })??;
         if let Some(terminator) = terminator {
-            bail!(unexpected_token(terminator));
+            bail!(unexpected_token(
+                terminator,
+                "expected instruction".to_owned(),
+            ));
         }
 
         Ok(Self { instructions })
@@ -164,7 +167,10 @@ fn instructions_until_terminator<'a>(
                                 token,
                             )),
                             Some(terminator) => {
-                                bail!(unexpected_token(terminator))
+                                bail!(unexpected_token(
+                                    terminator,
+                                    "expected `end`".to_owned(),
+                                ))
                             }
                         }
                     }
@@ -280,10 +286,13 @@ pub enum BinLogicOp {
     Xnor,
 }
 
-fn unexpected_token(token: Token) -> diagnostics::Error {
+fn unexpected_token(
+    token: Token,
+    label: impl Into<Option<String>>,
+) -> diagnostics::Error {
     diagnostics::error(
         format!("unexpected `{token}`"),
-        vec![primary_label(token.span, None)],
+        vec![primary_label(token.span, label)],
     )
 }
 
