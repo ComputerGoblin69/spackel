@@ -81,7 +81,7 @@ fn expand_macros<'a>(
                     }
                     _ => Some(Ok(macros.get(&*token).map_or_else(
                         || vec![token],
-                        |macro_: &Macro| macro_.body.clone(),
+                        |macro_: &Macro| macro_.body_with_span(token.span),
                     ))),
                 })
                 .flatten_ok()
@@ -110,17 +110,7 @@ fn expand_macros<'a>(
         }
         _ => Ok(macros.get(&*token).map_or_else(
             || vec![token],
-            |macro_| {
-                macro_
-                    .body
-                    .iter()
-                    .copied()
-                    .map(|body_token| Token {
-                        span: token.span,
-                        ..body_token
-                    })
-                    .collect()
-            },
+            |macro_| macro_.body_with_span(token.span),
         )),
     })
     .flatten_ok()
@@ -129,6 +119,15 @@ fn expand_macros<'a>(
 struct Macro<'a> {
     declaration_span: Span,
     body: Vec<Token<'a>>,
+}
+
+impl<'a> Macro<'a> {
+    fn body_with_span(&self, span: Span) -> Vec<Token<'a>> {
+        self.body
+            .iter()
+            .map(|&token| Token { span, ..token })
+            .collect()
+    }
 }
 
 fn instructions_until_terminator<'a>(
