@@ -89,7 +89,10 @@ fn expand_macros<'a>(
             ensure!(found_end, unterminated("macro definition", token));
             ensure!(
                 macros.insert(name.text, body).is_none(),
-                "redefinition of macro `{name}`"
+                diagnostics::error(
+                    format!("redefinition of macro `{name}`"),
+                    vec![primary_label(token.span, None)],
+                ),
             );
             Ok(Vec::new())
         }
