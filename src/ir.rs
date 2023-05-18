@@ -90,7 +90,7 @@ fn expand_macros<'a>(
             let prev_definition = macros.insert(
                 name.text,
                 Macro {
-                    name_span: name.span,
+                    declaration_span: macro_token.span.merge(name.span),
                     body,
                 },
             );
@@ -98,9 +98,9 @@ fn expand_macros<'a>(
                 bail!(diagnostics::error(
                     format!("redefinition of macro `{name}`"),
                     vec![
-                        primary_label(token.span, None),
+                        primary_label(macro_token.span.merge(name.span), None),
                         secondary_label(
-                            prev_definition.name_span,
+                            prev_definition.declaration_span,
                             "previously defined here".to_owned(),
                         )
                     ],
@@ -127,7 +127,7 @@ fn expand_macros<'a>(
 }
 
 struct Macro<'a> {
-    name_span: Span,
+    declaration_span: Span,
     body: Vec<Token<'a>>,
 }
 
