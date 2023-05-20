@@ -41,6 +41,11 @@ you, including ensuring that the runtime and the compiler itself are up to date:
 
 - `i32`: the signed 32-bit integer type.
 - `bool`: boolean `true` or `false`.
+- `type`: the type of types. If you run into Girard's paradox because of this,
+  please file an issue.
+
+Types are values but you can't do much with them yet, other than shuffle them
+around with the stack manipulation instructions.
 
 ## Macros
 

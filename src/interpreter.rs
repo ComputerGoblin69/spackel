@@ -1,6 +1,7 @@
 use crate::{
     ir::{BinLogicOp, BinMathOp, Comparison, Instruction, Program},
     stack::Stack,
+    typ::Type,
 };
 
 pub fn interpret(program: &crate::typ::Checked<Program>) {
@@ -11,6 +12,7 @@ pub fn interpret(program: &crate::typ::Checked<Program>) {
 enum Value {
     Bool(bool),
     I32(i32),
+    Type(Type),
 }
 
 struct Interpreter {
@@ -67,6 +69,7 @@ impl Interpreter {
             }
             Instruction::PushI32(number) => self.push(Value::I32(*number)),
             Instruction::PushBool(b) => self.push(Value::Bool(*b)),
+            Instruction::PushType(typ) => self.push(Value::Type(*typ)),
             Instruction::Print => print!("{}", self.pop_i32()),
             Instruction::Println => println!("{}", self.pop_i32()),
             #[allow(clippy::cast_sign_loss)]

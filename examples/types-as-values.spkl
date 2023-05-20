@@ -1,0 +1,9 @@
+# Types are values:
+
+i32
+dup
+bool
+swap
+drop drop drop
+
+# Not very useful yet, as you can see.

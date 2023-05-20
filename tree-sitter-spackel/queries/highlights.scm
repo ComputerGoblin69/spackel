@@ -24,4 +24,9 @@
  (#match? @constant.builtin.boolean "^(true|false)$")
 )
 
+(
+ (word) @type.builtin
+ (#match? @type.builtin "^(i32|bool|type)$")
+)
+
 (word) @variable

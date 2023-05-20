@@ -1,6 +1,7 @@
 use crate::{
     diagnostics::{self, primary_label, secondary_label},
     lexer::{lex, Token},
+    typ::Type,
 };
 use anyhow::{bail, ensure, Result};
 use codemap::{Span, Spanned};
@@ -194,6 +195,7 @@ pub enum Instruction {
     ThenElse(Block, Block),
     PushI32(i32),
     PushBool(bool),
+    PushType(Type),
     Print,
     Println,
     PrintChar,
@@ -216,6 +218,9 @@ impl TryFrom<Token<'_>> for Instruction {
         Ok(match &*token {
             "true" => Self::PushBool(true),
             "false" => Self::PushBool(false),
+            "i32" => Self::PushType(Type::I32),
+            "bool" => Self::PushType(Type::Bool),
+            "type" => Self::PushType(Type::Type),
             "print" => Self::Print,
             "println" => Self::Println,
             "print-char" => Self::PrintChar,

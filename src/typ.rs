@@ -8,9 +8,10 @@ use itertools::Itertools;
 use std::{fmt, ops::Deref};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Type {
+pub enum Type {
     Bool,
     I32,
+    Type,
 }
 
 impl fmt::Display for Type {
@@ -18,6 +19,7 @@ impl fmt::Display for Type {
         f.write_str(match self {
             Self::Bool => "bool",
             Self::I32 => "i32",
+            Self::Type => "type",
         })
     }
 }
@@ -99,6 +101,7 @@ impl Checker {
             }
             Instruction::PushI32(_) => (&[], &[R(I32)]),
             Instruction::PushBool(_) => (&[], &[R(Bool)]),
+            Instruction::PushType(_) => (&[], &[R(Type::Type)]),
             Instruction::BinMathOp(_) => (&[P(I32); 2], &[R(I32)]),
             Instruction::Comparison(_) => (&[P(I32); 2], &[R(Bool)]),
             Instruction::Print
