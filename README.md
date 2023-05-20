@@ -129,3 +129,7 @@ definition of a new macro.
 - `print-char`: pops the top element, reinterprets it as unsigned, converts that
   to a Unicode scalar value, or `U+FFFD REPLACEMENT CHARACTER` in the case of an
   invalid code point, and prints it.
+
+### Type shenanigans
+
+- `type-of`: replaces the top element with its type.

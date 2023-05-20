@@ -15,6 +15,16 @@ enum Value {
     Type(Type),
 }
 
+impl Value {
+    fn typ(self) -> Type {
+        match self {
+            Self::Bool(_) => Type::Bool,
+            Self::I32(_) => Type::I32,
+            Self::Type(_) => Type::Type,
+        }
+    }
+}
+
 struct Interpreter {
     stack: Vec<Value>,
 }
@@ -70,6 +80,10 @@ impl Interpreter {
             Instruction::PushI32(number) => self.push(Value::I32(*number)),
             Instruction::PushBool(b) => self.push(Value::Bool(*b)),
             Instruction::PushType(typ) => self.push(Value::Type(*typ)),
+            Instruction::TypeOf => {
+                let a = self.pop();
+                self.push(Value::Type(a.typ()));
+            }
             Instruction::Print => print!("{}", self.pop_i32()),
             Instruction::Println => println!("{}", self.pop_i32()),
             #[allow(clippy::cast_sign_loss)]

@@ -171,7 +171,7 @@ impl Compiler {
             Instruction::PushBool(b) => {
                 self.stack.push(fb.ins().iconst(I8, i64::from(*b)));
             }
-            Instruction::PushType(_) => todo!(),
+            Instruction::PushType(_) | Instruction::TypeOf => todo!(),
             Instruction::Print => {
                 let n = self.pop();
                 let fmt = self.allocate_str("%d\0", fb);

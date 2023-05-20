@@ -102,6 +102,7 @@ impl Checker {
             Instruction::PushI32(_) => (&[], &[R(I32)]),
             Instruction::PushBool(_) => (&[], &[R(Bool)]),
             Instruction::PushType(_) => (&[], &[R(Type::Type)]),
+            Instruction::TypeOf => (&[Any], &[R(Type::Type)]),
             Instruction::BinMathOp(_) => (&[P(I32); 2], &[R(I32)]),
             Instruction::Comparison(_) => (&[P(I32); 2], &[R(Bool)]),
             Instruction::Print

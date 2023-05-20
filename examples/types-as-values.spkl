@@ -2,7 +2,7 @@
 
 i32
 dup
-bool
+true type-of
 swap
 drop drop drop
 
