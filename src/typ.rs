@@ -97,8 +97,8 @@ impl Checker {
             Instruction::Then(_) | Instruction::ThenElse(..) => {
                 (&[P(Bool)], &[])
             }
-            Instruction::Push(_) => (&[], &[R(I32)]),
-            Instruction::True | Instruction::False => (&[], &[R(Bool)]),
+            Instruction::PushI32(_) => (&[], &[R(I32)]),
+            Instruction::PushBool(_) => (&[], &[R(Bool)]),
             Instruction::BinMathOp(_) => (&[P(I32); 2], &[R(I32)]),
             Instruction::Comparison(_) => (&[P(I32); 2], &[R(Bool)]),
             Instruction::Print

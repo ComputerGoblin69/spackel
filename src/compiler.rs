@@ -165,11 +165,12 @@ impl Compiler {
             Instruction::ThenElse(then, else_) => {
                 self.compile_then_else(then, else_, fb);
             }
-            Instruction::Push(number) => {
+            Instruction::PushI32(number) => {
                 self.stack.push(fb.ins().iconst(I32, i64::from(*number)));
             }
-            Instruction::True => self.stack.push(fb.ins().iconst(I8, 1)),
-            Instruction::False => self.stack.push(fb.ins().iconst(I8, 0)),
+            Instruction::PushBool(b) => {
+                self.stack.push(fb.ins().iconst(I8, i64::from(*b)));
+            }
             Instruction::Print => {
                 let n = self.pop();
                 let fmt = self.allocate_str("%d\0", fb);

@@ -65,9 +65,8 @@ impl Interpreter {
                     self.interpret_instruction(instruction);
                 }
             }
-            Instruction::Push(number) => self.push(Value::I32(*number)),
-            Instruction::True => self.push(Value::Bool(true)),
-            Instruction::False => self.push(Value::Bool(false)),
+            Instruction::PushI32(number) => self.push(Value::I32(*number)),
+            Instruction::PushBool(b) => self.push(Value::Bool(*b)),
             Instruction::Print => print!("{}", self.pop_i32()),
             Instruction::Println => println!("{}", self.pop_i32()),
             #[allow(clippy::cast_sign_loss)]

@@ -192,9 +192,8 @@ type Block = Box<[Spanned<Instruction>]>;
 pub enum Instruction {
     Then(Block),
     ThenElse(Block, Block),
-    Push(i32),
-    True,
-    False,
+    PushI32(i32),
+    PushBool(bool),
     Print,
     Println,
     PrintChar,
@@ -215,8 +214,8 @@ impl TryFrom<Token<'_>> for Instruction {
 
     fn try_from(token: Token<'_>) -> Result<Self> {
         Ok(match &*token {
-            "true" => Self::True,
-            "false" => Self::False,
+            "true" => Self::PushBool(true),
+            "false" => Self::PushBool(false),
             "print" => Self::Print,
             "println" => Self::Println,
             "print-char" => Self::PrintChar,
@@ -238,14 +237,14 @@ impl TryFrom<Token<'_>> for Instruction {
             "nand" => Self::BinLogicOp(BinLogicOp::Nand),
             "nor" => Self::BinLogicOp(BinLogicOp::Nor),
             "xnor" => Self::BinLogicOp(BinLogicOp::Xnor),
-            "ß" => Self::Push(1945),
+            "ß" => Self::PushI32(1945),
             "drop" => Self::Drop,
             "dup" => Self::Dup,
             "swap" => Self::Swap,
             "over" => Self::Over,
             "nip" => Self::Nip,
             "tuck" => Self::Tuck,
-            _ => Self::Push(token.parse().map_err(|_| {
+            _ => Self::PushI32(token.parse().map_err(|_| {
                 diagnostics::error(
                     format!("unknown instruction: `{token}`"),
                     vec![primary_label(token.span, "")],
