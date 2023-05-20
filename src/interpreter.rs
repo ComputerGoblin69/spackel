@@ -16,7 +16,7 @@ enum Value {
 }
 
 impl Value {
-    fn typ(self) -> Type {
+    const fn typ(self) -> Type {
         match self {
             Self::Bool(_) => Type::Bool,
             Self::I32(_) => Type::I32,
