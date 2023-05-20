@@ -129,7 +129,7 @@ impl Checker {
                             before.iter().format(" "),
                             self.stack.iter().format(" "),
                         ),
-                        vec![primary_label(instruction.span, None)],
+                        vec![primary_label(instruction.span, "")],
                     ),
                 );
             }
@@ -150,7 +150,7 @@ impl Checker {
                             then_types.iter().format(" "),
                             self.stack.iter().format(" "),
                         ),
-                        vec![primary_label(instruction.span, None)],
+                        vec![primary_label(instruction.span, "")],
                     ),
                 );
             }

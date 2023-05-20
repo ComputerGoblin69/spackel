@@ -35,24 +35,18 @@ pub const fn error(message: String, spans: Vec<SpanLabel>) -> Error {
     })
 }
 
-pub fn primary_label(
-    span: Span,
-    label: impl Into<Option<String>>,
-) -> SpanLabel {
+pub fn primary_label(span: Span, label: impl Into<String>) -> SpanLabel {
     SpanLabel {
         span,
-        label: label.into(),
+        label: Some(label.into()),
         style: SpanStyle::Primary,
     }
 }
 
-pub fn secondary_label(
-    span: Span,
-    label: impl Into<Option<String>>,
-) -> SpanLabel {
+pub fn secondary_label(span: Span, label: impl Into<String>) -> SpanLabel {
     SpanLabel {
         span,
-        label: label.into(),
+        label: Some(label.into()),
         style: SpanStyle::Secondary,
     }
 }

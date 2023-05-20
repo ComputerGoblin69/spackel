@@ -19,10 +19,7 @@ impl Program {
                 instructions_until_terminator(&mut tokens)
             })??;
         if let Some(terminator) = terminator {
-            bail!(unexpected_token(
-                terminator,
-                "expected instruction".to_owned(),
-            ));
+            bail!(unexpected_token(terminator, "expected instruction"));
         }
 
         Ok(Self { instructions })
@@ -40,14 +37,14 @@ fn expand_macros<'a>(
             let name = tokens.next().ok_or_else(|| {
                 diagnostics::error(
                     "macro definition has no name".to_owned(),
-                    vec![primary_label(token.span, None)],
+                    vec![primary_label(token.span, "")],
                 )
             })?;
             ensure!(
                 !is_keyword(&name),
                 diagnostics::error(
                     format!("keyword `{name}` cannot be used as a macro name"),
-                    vec![primary_label(name.span, None)],
+                    vec![primary_label(name.span, "")],
                 ),
             );
             let mut found_end = false;
@@ -69,11 +66,11 @@ fn expand_macros<'a>(
                         vec![
                             primary_label(
                                 token.span,
-                                "inner macro starts here".to_owned(),
+                                "inner macro starts here",
                             ),
                             secondary_label(
                                 macro_token.span,
-                                "outer macro starts here".to_owned(),
+                                "outer macro starts here",
                             ),
                         ],
                     )
@@ -101,10 +98,10 @@ fn expand_macros<'a>(
                 bail!(diagnostics::error(
                     format!("redefinition of macro `{name}`"),
                     vec![
-                        primary_label(macro_token.span.merge(name.span), None),
+                        primary_label(macro_token.span.merge(name.span), ""),
                         secondary_label(
                             prev_definition.declaration_span,
-                            "previously defined here".to_owned(),
+                            "previously defined here",
                         )
                     ],
                 ));
@@ -168,7 +165,7 @@ fn instructions_until_terminator<'a>(
                             },
                             _ => bail!(unexpected_token(
                                 terminator,
-                                "expected `end`".to_owned(),
+                                "expected `end`",
                             )),
                         }
                     }
@@ -251,7 +248,7 @@ impl TryFrom<Token<'_>> for Instruction {
             _ => Self::Push(token.parse().map_err(|_| {
                 diagnostics::error(
                     format!("unknown instruction: `{token}`"),
-                    vec![primary_label(token.span, None)],
+                    vec![primary_label(token.span, "")],
                 )
             })?),
         })
@@ -286,7 +283,7 @@ pub enum BinLogicOp {
 
 fn unexpected_token(
     token: Token,
-    label: impl Into<Option<String>>,
+    label: impl Into<String>,
 ) -> diagnostics::Error {
     diagnostics::error(
         format!("unexpected `{token}`"),
@@ -297,6 +294,6 @@ fn unexpected_token(
 fn unterminated(thing: &str, token: Token) -> diagnostics::Error {
     diagnostics::error(
         format!("unterminated {thing}"),
-        vec![primary_label(token.span, None)],
+        vec![primary_label(token.span, "")],
     )
 }
