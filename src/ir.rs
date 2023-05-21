@@ -140,7 +140,7 @@ fn instructions_until_terminator<'a>(
             return Ok(None);
         };
         Ok(Some(match &*token {
-            "end" | "else" => {
+            "end" | "else" | ":" | "->" => {
                 terminator = Some(token);
                 return Ok(None);
             }
@@ -170,7 +170,10 @@ fn instructions_until_terminator<'a>(
                             )),
                         }
                     }
-                    _ => unreachable!(),
+                    _ => bail!(unexpected_token(
+                        terminator,
+                        "expected `else` or `end`",
+                    )),
                 }
             }
             _ => Spanned {
