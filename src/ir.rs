@@ -185,7 +185,10 @@ fn instructions_until_terminator<'a>(
 }
 
 fn is_keyword(token: &str) -> bool {
-    matches!(token, "macro" | "then" | "else" | "end")
+    matches!(
+        token,
+        "macro" | "then" | "else" | "end" | "do" | "fn" | ":" | "->"
+    )
 }
 
 type Block = Box<[Spanned<Instruction>]>;
