@@ -82,6 +82,12 @@ fn function-name : input-1 input-2 -> output-1 output-2 do
 end
 ```
 
+The lists of parameters and return types are themselves blocks of Spackel
+instructions; when you write down a type in a function signature, such as `i32`,
+that's really *the instruction that pushes the type `i32` onto the stack*. The
+set of instructions that can be used in signatures are however very limited
+for now.
+
 ## Instructions
 
 ### Constants
