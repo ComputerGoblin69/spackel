@@ -140,7 +140,7 @@ fn instructions_until_terminator<'a>(
             return Ok(None);
         };
         Ok(Some(match &*token {
-            "end" | "else" | ":" | "->" => {
+            "end" | "else" | "do" | ":" | "->" => {
                 terminator = Some(token);
                 return Ok(None);
             }
