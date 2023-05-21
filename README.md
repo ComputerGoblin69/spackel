@@ -71,6 +71,17 @@ definition of a new macro.
 - `then THEN else ELSE end`: pops a boolean and runs `THEN` if it is true or
   `ELSE` if it is false.
 
+## User-defined functions
+
+Functions are defined as follows, where `input-N` are the types of the
+parameters and `output-N` are the types of the returned values:
+
+```spackel
+fn function-name : input-1 input-2 -> output-1 output-2 do
+  # ...
+end
+```
+
 ## Instructions
 
 ### Constants
