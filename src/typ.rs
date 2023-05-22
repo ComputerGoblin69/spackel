@@ -205,9 +205,32 @@ impl Checker {
         use Return::{Concrete as R, Get};
         use Type::{Bool, I32};
 
+        let parameters;
+        let returns;
         let (inputs, outputs): (&[Parameter], &[Return]) = match &**instruction
         {
-            Instruction::Call(_name) => todo!(),
+            Instruction::Call(name) => {
+                let signature =
+                    self.function_signatures.get(&**name).ok_or_else(|| {
+                        diagnostics::error(
+                            format!("unknown instruction: `{name}`"),
+                            vec![primary_label(instruction.span, "")],
+                        )
+                    })?;
+                parameters = signature
+                    .parameters
+                    .iter()
+                    .copied()
+                    .map(P)
+                    .collect::<Box<_>>();
+                returns = signature
+                    .returns
+                    .iter()
+                    .copied()
+                    .map(R)
+                    .collect::<Box<_>>();
+                (&*parameters, &*returns)
+            }
             Instruction::Then(_) | Instruction::ThenElse(..) => {
                 (&[P(Bool)], &[])
             }
