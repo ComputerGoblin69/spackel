@@ -36,9 +36,13 @@ impl CheckedProgram {
 
 pub struct CheckedFunction {
     declaration_span: Span,
+    signature: FunctionSignature,
+    pub body: Box<[Spanned<Instruction>]>,
+}
+
+pub struct FunctionSignature {
     parameters: Box<[Type]>,
     returns: Box<[Type]>,
-    pub body: Box<[Spanned<Instruction>]>,
 }
 
 pub fn check(program: Program) -> Result<CheckedProgram> {
@@ -66,7 +70,8 @@ impl Checker {
             .get("main")
             .context("program has no `main` function")?;
         ensure!(
-            main.parameters.is_empty() && main.returns.is_empty(),
+            main.signature.parameters.is_empty()
+                && main.signature.returns.is_empty(),
             diagnostics::error(
                 "`main` function has wrong signature".to_owned(),
                 vec![primary_label(main.declaration_span, "defined here")]
@@ -130,8 +135,10 @@ impl Checker {
 
         Ok(CheckedFunction {
             declaration_span: function.declaration_span,
-            parameters,
-            returns,
+            signature: FunctionSignature {
+                parameters,
+                returns,
+            },
             body: function.body,
         })
     }
