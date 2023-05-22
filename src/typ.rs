@@ -40,17 +40,61 @@ pub struct CheckedFunction {
     pub body: Box<[Spanned<Instruction>]>,
 }
 
+#[derive(Clone)]
 pub struct FunctionSignature {
     parameters: Box<[Type]>,
     returns: Box<[Type]>,
 }
 
 pub fn check(program: Program) -> Result<CheckedProgram> {
-    Checker { stack: Vec::new() }.check(program)
+    let function_signatures = program
+        .functions
+        .iter()
+        .map(|(name, function)| {
+            let parameters = function
+                .parameters
+                .iter()
+                .map(|param| match &**param {
+                    Instruction::PushType(typ) => Ok(*typ),
+                    _ => Err(diagnostics::error(
+                        "unsupported instruction in function signature"
+                            .to_owned(),
+                        vec![primary_label(param.span, "")],
+                    )),
+                })
+                .collect::<Result<Box<_>, _>>()?;
+            let returns = function
+                .returns
+                .iter()
+                .map(|param| match &**param {
+                    Instruction::PushType(typ) => Ok(*typ),
+                    _ => Err(diagnostics::error(
+                        "unsupported instruction in function signature"
+                            .to_owned(),
+                        vec![primary_label(param.span, "")],
+                    )),
+                })
+                .collect::<Result<Box<_>, _>>()?;
+            Ok((
+                name.clone(),
+                FunctionSignature {
+                    parameters,
+                    returns,
+                },
+            ))
+        })
+        .collect::<Result<_>>()?;
+
+    Checker {
+        stack: Vec::new(),
+        function_signatures,
+    }
+    .check(program)
 }
 
 struct Checker {
     stack: Vec<Type>,
+    function_signatures: HashMap<String, FunctionSignature>,
 }
 
 impl Checker {
@@ -60,7 +104,9 @@ impl Checker {
                 .functions
                 .into_iter()
                 .map(|(name, function)| {
-                    Ok((name, self.check_function(function)?))
+                    let checked_function =
+                        self.check_function(&name, function)?;
+                    Ok((name, checked_function))
                 })
                 .collect::<Result<_>>()?,
         };
@@ -84,37 +130,17 @@ impl Checker {
 
     fn check_function(
         &mut self,
+        name: &str,
         function: Function,
     ) -> Result<CheckedFunction> {
-        let parameters = function
-            .parameters
-            .iter()
-            .map(|param| match &**param {
-                Instruction::PushType(typ) => Ok(*typ),
-                _ => Err(diagnostics::error(
-                    "unsupported instruction in function signature".to_owned(),
-                    vec![primary_label(param.span, "")],
-                )),
-            })
-            .collect::<Result<Box<_>, _>>()?;
-        let returns = function
-            .returns
-            .iter()
-            .map(|param| match &**param {
-                Instruction::PushType(typ) => Ok(*typ),
-                _ => Err(diagnostics::error(
-                    "unsupported instruction in function signature".to_owned(),
-                    vec![primary_label(param.span, "")],
-                )),
-            })
-            .collect::<Result<Box<_>, _>>()?;
-
-        self.stack = parameters.to_vec();
+        self.stack = self.function_signatures[name].parameters.to_vec();
         for instruction in &*function.body {
             self.check_instruction(instruction)?;
         }
+
         self.transform(
-            &returns
+            &self.function_signatures[name]
+                .returns
                 .iter()
                 .copied()
                 .map(Parameter::Concrete)
@@ -135,10 +161,7 @@ impl Checker {
 
         Ok(CheckedFunction {
             declaration_span: function.declaration_span,
-            signature: FunctionSignature {
-                parameters,
-                returns,
-            },
+            signature: self.function_signatures[name].clone(),
             body: function.body,
         })
     }
