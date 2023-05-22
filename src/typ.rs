@@ -117,6 +117,16 @@ impl Checker {
             &[],
             function.end_span,
         )?;
+        ensure!(
+            self.stack.is_empty(),
+            diagnostics::error(
+                format!(
+                    "there are values left on the stack with the following types: `{}`",
+                    self.stack.iter().format(" ")
+                ),
+                vec![primary_label(function.end_span, "")]
+            )
+        );
 
         Ok(CheckedFunction {
             declaration_span: function.declaration_span,
