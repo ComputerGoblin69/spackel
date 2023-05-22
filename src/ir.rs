@@ -9,21 +9,18 @@ use itertools::{process_results, Itertools};
 use std::collections::HashMap;
 
 pub struct Program {
-    pub instructions: Block,
+    pub functions: HashMap<String, Function>,
 }
 
 impl Program {
     pub fn parse(file: &codemap::File) -> Result<Self> {
         let tokens = expand_macros(lex(file));
-        let (instructions, terminator) =
-            process_results(tokens, |mut tokens| {
-                instructions_until_terminator(&mut tokens)
-            })??;
-        if let Some(terminator) = terminator {
-            bail!(unexpected_token(terminator, "expected instruction"));
-        }
+        let functions = process_results(tokens, |tokens| {
+            extra_iterators::batching_map(tokens, Function::parse)
+                .collect::<Result<_>>()
+        })??;
 
-        Ok(Self { instructions })
+        Ok(Self { functions })
     }
 }
 
@@ -185,6 +182,76 @@ fn instructions_until_terminator<'a>(
     .collect::<Result<_>>()?;
 
     Ok((instructions, terminator))
+}
+
+pub struct Function {
+    pub declaration_span: Span,
+    pub parameters: Block,
+    pub returns: Block,
+    pub body: Block,
+    pub end_span: Span,
+}
+
+impl Function {
+    fn parse<'a>(
+        mut tokens: &mut impl Iterator<Item = Token<'a>>,
+        token: Token,
+    ) -> Result<(String, Self)> {
+        ensure!(
+            *token == *"fn",
+            unexpected_token(token, "expected function or macro definition")
+        );
+
+        let name = tokens.next().ok_or_else(|| {
+            diagnostics::error(
+                "function has no name".to_owned(),
+                vec![primary_label(token.span, "")],
+            )
+        })?;
+        ensure!(
+            !is_keyword(&name),
+            diagnostics::error(
+                format!("keyword `{name}` cannot be used as a function name"),
+                vec![primary_label(name.span, "")],
+            ),
+        );
+
+        let colon = tokens
+            .next()
+            .ok_or_else(|| unterminated("function definition", token))?;
+        ensure!(*colon == *":", unexpected_token(colon, "expected `:`"));
+
+        let mut instructions_until_specific_terminator = |terminator| {
+            let (instructions, Some(t)) =
+                instructions_until_terminator(&mut tokens)?
+            else {
+                bail!(unterminated("function definition", token));
+            };
+            ensure!(
+                &*t == terminator,
+                unexpected_token(
+                    t,
+                    format!("expected instruction or `{terminator}`")
+                )
+            );
+            Ok((instructions, t))
+        };
+
+        let parameters = instructions_until_specific_terminator("->")?.0;
+        let returns = instructions_until_specific_terminator("do")?.0;
+        let (body, end) = instructions_until_specific_terminator("end")?;
+
+        Ok((
+            name.text.to_owned(),
+            Self {
+                declaration_span: token.span.merge(name.span),
+                parameters,
+                returns,
+                body,
+                end_span: end.span,
+            },
+        ))
+    }
 }
 
 fn is_keyword(token: &str) -> bool {

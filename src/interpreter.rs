@@ -43,7 +43,7 @@ impl Stack for Interpreter {
 
 impl Interpreter {
     fn interpret(&mut self, program: &Program) {
-        for instruction in &*program.instructions {
+        for instruction in &*program.functions["main"].body {
             self.interpret_instruction(instruction);
         }
     }

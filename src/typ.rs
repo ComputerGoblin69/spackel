@@ -1,8 +1,8 @@
 use crate::{
     diagnostics::{self, primary_label},
-    ir::{Instruction, Program},
+    ir::{Function, Instruction, Program},
 };
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use codemap::{Span, Spanned};
 use itertools::Itertools;
 use std::{fmt, ops::Deref};
@@ -44,15 +44,54 @@ struct Checker {
 
 impl Checker {
     fn check(&mut self, program: Program) -> Result<Checked<Program>> {
-        for instruction in &*program.instructions {
+        let main = program
+            .functions
+            .get("main")
+            .context("program has no `main` function")?;
+        ensure!(
+            main.parameters.is_empty() && main.returns.is_empty(),
+            diagnostics::error(
+                "`main` function has wrong signature".to_owned(),
+                vec![primary_label(main.declaration_span, "defined here")]
+            )
+            .note("`main` must have no parameters and no return values")
+        );
+
+        for function in program.functions.values() {
+            self.check_function(function)?;
+        }
+        Ok(Checked(program))
+    }
+
+    fn check_function(&mut self, function: &Function) -> Result<()> {
+        let parameters = function
+            .parameters
+            .iter()
+            .map(|param| match &**param {
+                Instruction::PushType(typ) => Ok(*typ),
+                _ => Err(diagnostics::error(
+                    "unsupported instruction in function signature".to_owned(),
+                    vec![primary_label(param.span, "")],
+                )),
+            })
+            .collect::<Result<_, _>>()?;
+        let returns = function
+            .returns
+            .iter()
+            .map(|param| match &**param {
+                Instruction::PushType(typ) => Ok(Parameter::Concrete(*typ)),
+                _ => Err(diagnostics::error(
+                    "unsupported instruction in function signature".to_owned(),
+                    vec![primary_label(param.span, "")],
+                )),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        self.stack = parameters;
+        for instruction in &*function.body {
             self.check_instruction(instruction)?;
         }
-        ensure!(
-            self.stack.is_empty(),
-            "there are values left on the stack with the following types: `{}`",
-            self.stack.iter().format(" ")
-        );
-        Ok(Checked(program))
+        self.transform(&returns, &[], function.end_span)
     }
 
     fn transform(

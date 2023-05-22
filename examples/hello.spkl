@@ -1,20 +1,22 @@
-72 print-char
-101 print-char
-108 print-char
-108 print-char
-111 print-char
-32 print-char
-102 print-char
-114 print-char
-111 print-char
-109 print-char
-32 print-char
-83 print-char
-112 print-char
-97 print-char
-99 print-char
-107 print-char
-101 print-char
-108 print-char
-33 print-char
-10 print-char
+fn main : -> do
+  72 print-char
+  101 print-char
+  108 print-char
+  108 print-char
+  111 print-char
+  32 print-char
+  102 print-char
+  114 print-char
+  111 print-char
+  109 print-char
+  32 print-char
+  83 print-char
+  112 print-char
+  97 print-char
+  99 print-char
+  107 print-char
+  101 print-char
+  108 print-char
+  33 print-char
+  10 print-char
+end

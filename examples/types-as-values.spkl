@@ -1,9 +1,11 @@
 # Types are values:
 
-i32
-dup
-true type-of
-swap
-drop drop drop
+fn main : -> do
+  i32
+  dup
+  true type-of
+  swap
+  drop drop drop
+end
 
 # Not very useful yet, as you can see.
