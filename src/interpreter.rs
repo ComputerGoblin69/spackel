@@ -1,10 +1,10 @@
 use crate::{
-    ir::{BinLogicOp, BinMathOp, Comparison, Instruction, Program},
+    ir::{BinLogicOp, BinMathOp, Comparison, Instruction},
     stack::Stack,
     typ::Type,
 };
 
-pub fn interpret(program: &crate::typ::Checked<Program>) {
+pub fn interpret(program: &crate::typ::CheckedProgram) {
     Interpreter { stack: Vec::new() }.interpret(program);
 }
 
@@ -42,8 +42,8 @@ impl Stack for Interpreter {
 }
 
 impl Interpreter {
-    fn interpret(&mut self, program: &Program) {
-        for instruction in &*program.functions["main"].body {
+    fn interpret(&mut self, program: &crate::typ::CheckedProgram) {
+        for instruction in &*program.functions()["main"].body {
             self.interpret_instruction(instruction);
         }
     }

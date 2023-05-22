@@ -5,7 +5,7 @@ use crate::{
 use anyhow::{ensure, Context, Result};
 use codemap::{Span, Spanned};
 use itertools::Itertools;
-use std::{fmt, ops::Deref};
+use std::{collections::HashMap, fmt};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Type {
@@ -24,17 +24,24 @@ impl fmt::Display for Type {
     }
 }
 
-pub struct Checked<T>(T);
+pub struct CheckedProgram {
+    functions: HashMap<String, CheckedFunction>,
+}
 
-impl<T> Deref for Checked<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl CheckedProgram {
+    pub const fn functions(&self) -> &HashMap<String, CheckedFunction> {
+        &self.functions
     }
 }
 
-pub fn check(program: Program) -> Result<Checked<Program>> {
+pub struct CheckedFunction {
+    declaration_span: Span,
+    parameters: Box<[Type]>,
+    returns: Box<[Type]>,
+    pub body: Box<[Spanned<Instruction>]>,
+}
+
+pub fn check(program: Program) -> Result<CheckedProgram> {
     Checker { stack: Vec::new() }.check(program)
 }
 
@@ -43,8 +50,18 @@ struct Checker {
 }
 
 impl Checker {
-    fn check(&mut self, program: Program) -> Result<Checked<Program>> {
-        let main = program
+    fn check(&mut self, program: Program) -> Result<CheckedProgram> {
+        let checked_program = CheckedProgram {
+            functions: program
+                .functions
+                .into_iter()
+                .map(|(name, function)| {
+                    Ok((name, self.check_function(function)?))
+                })
+                .collect::<Result<_>>()?,
+        };
+
+        let main = checked_program
             .functions
             .get("main")
             .context("program has no `main` function")?;
@@ -57,13 +74,13 @@ impl Checker {
             .note("`main` must have no parameters and no return values")
         );
 
-        for function in program.functions.values() {
-            self.check_function(function)?;
-        }
-        Ok(Checked(program))
+        Ok(checked_program)
     }
 
-    fn check_function(&mut self, function: &Function) -> Result<()> {
+    fn check_function(
+        &mut self,
+        function: Function,
+    ) -> Result<CheckedFunction> {
         let parameters = function
             .parameters
             .iter()
@@ -74,24 +91,39 @@ impl Checker {
                     vec![primary_label(param.span, "")],
                 )),
             })
-            .collect::<Result<_, _>>()?;
+            .collect::<Result<Box<_>, _>>()?;
         let returns = function
             .returns
             .iter()
             .map(|param| match &**param {
-                Instruction::PushType(typ) => Ok(Parameter::Concrete(*typ)),
+                Instruction::PushType(typ) => Ok(*typ),
                 _ => Err(diagnostics::error(
                     "unsupported instruction in function signature".to_owned(),
                     vec![primary_label(param.span, "")],
                 )),
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Box<_>, _>>()?;
 
-        self.stack = parameters;
+        self.stack = parameters.to_vec();
         for instruction in &*function.body {
             self.check_instruction(instruction)?;
         }
-        self.transform(&returns, &[], function.end_span)
+        self.transform(
+            &returns
+                .iter()
+                .copied()
+                .map(Parameter::Concrete)
+                .collect::<Box<_>>(),
+            &[],
+            function.end_span,
+        )?;
+
+        Ok(CheckedFunction {
+            declaration_span: function.declaration_span,
+            parameters,
+            returns,
+            body: function.body,
+        })
     }
 
     fn transform(

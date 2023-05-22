@@ -1,5 +1,5 @@
 use crate::{
-    ir::{BinLogicOp, BinMathOp, Comparison, Instruction, Program},
+    ir::{BinLogicOp, BinMathOp, Comparison, Instruction},
     stack::Stack,
 };
 use anyhow::Result;
@@ -25,7 +25,7 @@ pub struct Options<'a> {
 }
 
 pub fn compile(
-    program: &crate::typ::Checked<Program>,
+    program: &crate::typ::CheckedProgram,
     options: &Options,
 ) -> Result<()> {
     let mut shared_builder = settings::builder();
@@ -127,11 +127,11 @@ impl Compiler {
         fb.ins().global_value(self.isa.pointer_type(), global_value)
     }
 
-    fn compile(&mut self, program: &Program) -> Result<()> {
+    fn compile(&mut self, program: &crate::typ::CheckedProgram) -> Result<()> {
         let mut ctx = Context::new();
         let mut func_ctx = FunctionBuilderContext::new();
 
-        for (name, function) in &program.functions {
+        for (name, function) in program.functions() {
             self.compile_function(name, function, &mut ctx, &mut func_ctx)?;
         }
 
@@ -141,7 +141,7 @@ impl Compiler {
     fn compile_function(
         &mut self,
         name: &str,
-        function: &crate::ir::Function,
+        function: &crate::typ::CheckedFunction,
         ctx: &mut Context,
         func_ctx: &mut FunctionBuilderContext,
     ) -> Result<()> {
