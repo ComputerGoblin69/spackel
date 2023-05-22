@@ -64,6 +64,7 @@ impl Interpreter {
 
     fn interpret_instruction(&mut self, instruction: &Instruction) {
         match instruction {
+            Instruction::Call(_name) => todo!(),
             Instruction::Then(body) => {
                 if self.pop_bool() {
                     for instruction in &**body {

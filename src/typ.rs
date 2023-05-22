@@ -177,6 +177,7 @@ impl Checker {
 
         let (inputs, outputs): (&[Parameter], &[Return]) = match &**instruction
         {
+            Instruction::Call(_name) => todo!(),
             Instruction::Then(_) | Instruction::ThenElse(..) => {
                 (&[P(Bool)], &[])
             }

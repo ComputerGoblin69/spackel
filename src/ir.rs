@@ -264,6 +264,7 @@ fn is_keyword(token: &str) -> bool {
 type Block = Box<[Spanned<Instruction>]>;
 
 pub enum Instruction {
+    Call(Box<str>),
     Then(Block),
     ThenElse(Block, Block),
     PushI32(i32),
@@ -324,12 +325,9 @@ impl TryFrom<Token<'_>> for Instruction {
             "over" => Self::Over,
             "nip" => Self::Nip,
             "tuck" => Self::Tuck,
-            _ => Self::PushI32(token.parse().map_err(|_| {
-                diagnostics::error(
-                    format!("unknown instruction: `{token}`"),
-                    vec![primary_label(token.span, "")],
-                )
-            })?),
+            _ => token
+                .parse()
+                .map_or_else(|_| Self::Call(token.text.into()), Self::PushI32),
         })
     }
 }

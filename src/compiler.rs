@@ -188,6 +188,7 @@ impl Compiler {
         fb: &mut FunctionBuilder,
     ) {
         match instruction {
+            Instruction::Call(_name) => todo!(),
             Instruction::Then(body) => self.compile_then(body, fb),
             Instruction::ThenElse(then, else_) => {
                 self.compile_then_else(then, else_, fb);
