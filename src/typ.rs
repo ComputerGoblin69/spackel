@@ -210,6 +210,14 @@ impl Checker {
         let (inputs, outputs): (&[Parameter], &[Return]) = match &**instruction
         {
             Instruction::Call(name) => {
+                ensure!(
+                    **name != *"main",
+                    diagnostics::error(
+                        "`main` cannot be called".to_owned(),
+                        vec![primary_label(instruction.span, "")]
+                    ).note("`main` implicitly returns the program exit code, making its signature not match up with what the source code indicates")
+                );
+
                 let signature =
                     self.function_signatures.get(&**name).ok_or_else(|| {
                         diagnostics::error(
