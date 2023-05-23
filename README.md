@@ -41,6 +41,11 @@ you, including ensuring that the runtime and the compiler itself are up to date:
 
 - `i32`: the signed 32-bit integer type.
 - `bool`: boolean `true` or `false`.
+- `type`: the type of types. If you run into Girard's paradox because of this,
+  please file an issue.
+
+Types are values but you can't do much with them yet, other than shuffle them
+around with the stack manipulation instructions.
 
 ## Macros
 
@@ -65,6 +70,23 @@ definition of a new macro.
 - `then BODY end`: pops a boolean and runs `BODY` if it is true.
 - `then THEN else ELSE end`: pops a boolean and runs `THEN` if it is true or
   `ELSE` if it is false.
+
+## User-defined functions
+
+Functions are defined as follows, where `input-N` are the types of the
+parameters and `output-N` are the types of the returned values:
+
+```spackel
+fn function-name : input-1 input-2 -> output-1 output-2 do
+  # ...
+end
+```
+
+The lists of parameters and return types are themselves blocks of Spackel
+instructions; when you write down a type in a function signature, such as `i32`,
+that's really *the instruction that pushes the type `i32` onto the stack*. The
+set of instructions that can be used in signatures is however very limited for
+now.
 
 ## Instructions
 
@@ -124,3 +146,7 @@ definition of a new macro.
 - `print-char`: pops the top element, reinterprets it as unsigned, converts that
   to a Unicode scalar value, or `U+FFFD REPLACEMENT CHARACTER` in the case of an
   invalid code point, and prints it.
+
+### Type shenanigans
+
+- `type-of`: replaces the top element with its type.

@@ -1,16 +1,17 @@
 use crate::{
     diagnostics::{self, primary_label},
-    ir::{Instruction, Program},
+    ir::{Function, Instruction, Program},
 };
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use codemap::{Span, Spanned};
 use itertools::Itertools;
-use std::{fmt, ops::Deref};
+use std::{collections::HashMap, fmt};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Type {
+pub enum Type {
     Bool,
     I32,
+    Type,
 }
 
 impl fmt::Display for Type {
@@ -18,39 +19,151 @@ impl fmt::Display for Type {
         f.write_str(match self {
             Self::Bool => "bool",
             Self::I32 => "i32",
+            Self::Type => "type",
         })
     }
 }
 
-pub struct Checked<T>(T);
+pub struct CheckedProgram {
+    functions: HashMap<String, CheckedFunction>,
+}
 
-impl<T> Deref for Checked<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl CheckedProgram {
+    pub const fn functions(&self) -> &HashMap<String, CheckedFunction> {
+        &self.functions
     }
 }
 
-pub fn check(program: Program) -> Result<Checked<Program>> {
-    Checker { stack: Vec::new() }.check(program)
+pub struct CheckedFunction {
+    declaration_span: Span,
+    pub signature: FunctionSignature,
+    pub body: Box<[Spanned<Instruction>]>,
+}
+
+#[derive(Clone)]
+pub struct FunctionSignature {
+    pub parameters: Box<[Type]>,
+    pub returns: Box<[Type]>,
+}
+
+pub fn check(program: Program) -> Result<CheckedProgram> {
+    let function_signatures = program
+        .functions
+        .iter()
+        .map(|(name, function)| {
+            let parameters = function
+                .parameters
+                .iter()
+                .map(|param| match &**param {
+                    Instruction::PushType(typ) => Ok(*typ),
+                    _ => Err(diagnostics::error(
+                        "unsupported instruction in function signature"
+                            .to_owned(),
+                        vec![primary_label(param.span, "")],
+                    )),
+                })
+                .collect::<Result<Box<_>, _>>()?;
+            let returns = function
+                .returns
+                .iter()
+                .map(|param| match &**param {
+                    Instruction::PushType(typ) => Ok(*typ),
+                    _ => Err(diagnostics::error(
+                        "unsupported instruction in function signature"
+                            .to_owned(),
+                        vec![primary_label(param.span, "")],
+                    )),
+                })
+                .collect::<Result<Box<_>, _>>()?;
+            Ok((
+                name.clone(),
+                FunctionSignature {
+                    parameters,
+                    returns,
+                },
+            ))
+        })
+        .collect::<Result<_>>()?;
+
+    Checker {
+        stack: Vec::new(),
+        function_signatures,
+    }
+    .check(program)
 }
 
 struct Checker {
     stack: Vec<Type>,
+    function_signatures: HashMap<String, FunctionSignature>,
 }
 
 impl Checker {
-    fn check(&mut self, program: Program) -> Result<Checked<Program>> {
-        for instruction in &*program.instructions {
+    fn check(&mut self, program: Program) -> Result<CheckedProgram> {
+        let checked_program = CheckedProgram {
+            functions: program
+                .functions
+                .into_iter()
+                .map(|(name, function)| {
+                    let checked_function =
+                        self.check_function(&name, function)?;
+                    Ok((name, checked_function))
+                })
+                .collect::<Result<_>>()?,
+        };
+
+        let main = checked_program
+            .functions
+            .get("main")
+            .context("program has no `main` function")?;
+        ensure!(
+            main.signature.parameters.is_empty()
+                && main.signature.returns.is_empty(),
+            diagnostics::error(
+                "`main` function has wrong signature".to_owned(),
+                vec![primary_label(main.declaration_span, "defined here")]
+            )
+            .note("`main` must have no parameters and no return values")
+        );
+
+        Ok(checked_program)
+    }
+
+    fn check_function(
+        &mut self,
+        name: &str,
+        function: Function,
+    ) -> Result<CheckedFunction> {
+        self.stack = self.function_signatures[name].parameters.to_vec();
+        for instruction in &*function.body {
             self.check_instruction(instruction)?;
         }
+
+        self.transform(
+            &self.function_signatures[name]
+                .returns
+                .iter()
+                .copied()
+                .map(Parameter::Concrete)
+                .collect::<Box<_>>(),
+            &[],
+            function.end_span,
+        )?;
         ensure!(
             self.stack.is_empty(),
-            "there are values left on the stack with the following types: `{}`",
-            self.stack.iter().format(" ")
+            diagnostics::error(
+                format!(
+                    "there are values left on the stack with the following types: `{}`",
+                    self.stack.iter().format(" ")
+                ),
+                vec![primary_label(function.end_span, "")]
+            )
         );
-        Ok(Checked(program))
+
+        Ok(CheckedFunction {
+            declaration_span: function.declaration_span,
+            signature: self.function_signatures[name].clone(),
+            body: function.body,
+        })
     }
 
     fn transform(
@@ -92,13 +205,47 @@ impl Checker {
         use Return::{Concrete as R, Get};
         use Type::{Bool, I32};
 
+        let parameters;
+        let returns;
         let (inputs, outputs): (&[Parameter], &[Return]) = match &**instruction
         {
+            Instruction::Call(name) => {
+                ensure!(
+                    **name != *"main",
+                    diagnostics::error(
+                        "`main` cannot be called".to_owned(),
+                        vec![primary_label(instruction.span, "")]
+                    ).note("`main` implicitly returns the program exit code, making its signature not match up with what the source code indicates")
+                );
+
+                let signature =
+                    self.function_signatures.get(&**name).ok_or_else(|| {
+                        diagnostics::error(
+                            format!("unknown instruction: `{name}`"),
+                            vec![primary_label(instruction.span, "")],
+                        )
+                    })?;
+                parameters = signature
+                    .parameters
+                    .iter()
+                    .copied()
+                    .map(P)
+                    .collect::<Box<_>>();
+                returns = signature
+                    .returns
+                    .iter()
+                    .copied()
+                    .map(R)
+                    .collect::<Box<_>>();
+                (&*parameters, &*returns)
+            }
             Instruction::Then(_) | Instruction::ThenElse(..) => {
                 (&[P(Bool)], &[])
             }
             Instruction::PushI32(_) => (&[], &[R(I32)]),
             Instruction::PushBool(_) => (&[], &[R(Bool)]),
+            Instruction::PushType(_) => (&[], &[R(Type::Type)]),
+            Instruction::TypeOf => (&[Any], &[R(Type::Type)]),
             Instruction::BinMathOp(_) => (&[P(I32); 2], &[R(I32)]),
             Instruction::Comparison(_) => (&[P(I32); 2], &[R(Bool)]),
             Instruction::Print

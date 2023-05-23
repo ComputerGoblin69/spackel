@@ -12,10 +12,12 @@ macro case
   end
 end
 
-0 case
-1 case
-2 case
-3 case
-4 case
+fn main : -> do
+  0 case
+  1 case
+  2 case
+  3 case
+  4 case
 
-10 print-char # \n
+  10 print-char # \n
+end

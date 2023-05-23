@@ -1,6 +1,7 @@
 use crate::{
-    ir::{BinLogicOp, BinMathOp, Comparison, Instruction, Program},
+    ir::{BinLogicOp, BinMathOp, Comparison, Instruction},
     stack::Stack,
+    typ::Type,
 };
 use anyhow::Result;
 use codemap::Spanned;
@@ -13,11 +14,11 @@ use cranelift::prelude::{
     settings,
     types::{I32, I8},
     AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext,
-    InstBuilder, IntCC, Signature, Type, Value,
+    InstBuilder, IntCC, Signature, Value,
 };
 use cranelift_module::{DataContext, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
-use std::{collections::HashMap, fs::File, io::Write, path::Path};
+use std::{collections::HashMap, fs::File, io::Write, path::Path, sync::Arc};
 
 pub struct Options<'a> {
     pub target_triple: &'a str,
@@ -25,7 +26,7 @@ pub struct Options<'a> {
 }
 
 pub fn compile(
-    program: &crate::typ::Checked<Program>,
+    program: &crate::typ::CheckedProgram,
     options: &Options,
 ) -> Result<()> {
     let mut shared_builder = settings::builder();
@@ -35,44 +36,84 @@ pub fn compile(
     let shared_flags = settings::Flags::new(shared_builder);
     let isa = cranelift::codegen::isa::lookup_by_name(options.target_triple)?
         .finish(shared_flags)?;
-    let call_conv = isa.default_call_conv();
-    let pointer_type = isa.pointer_type();
     let extern_function_signatures = extern_function_signatures(&*isa);
 
-    let mut ctx = Context::new();
-
-    let object_builder =
-        ObjectBuilder::new(isa, [], cranelift_module::default_libcall_names())?;
+    let object_builder = ObjectBuilder::new(
+        isa.clone(),
+        [],
+        cranelift_module::default_libcall_names(),
+    )?;
     let mut object_module = ObjectModule::new(object_builder);
 
-    let mut func_ctx = FunctionBuilderContext::new();
-    let signature = Signature {
-        params: Vec::new(),
-        returns: vec![AbiParam::new(I32)],
-        call_conv,
-    };
-    let main_func_id =
-        object_module.declare_function("main", Linkage::Export, &signature)?;
-    ctx.func =
-        Function::with_name_signature(UserFuncName::default(), signature);
-    let mut fb = FunctionBuilder::new(&mut ctx.func, &mut func_ctx);
-    let block = fb.create_block();
-    fb.switch_to_block(block);
-    fb.seal_block(block);
+    let function_signatures = program
+        .functions()
+        .iter()
+        .map(|(name, function)| {
+            let params = function
+                .signature
+                .parameters
+                .iter()
+                .map(|typ| match typ {
+                    Type::Bool => I8,
+                    Type::I32 => I32,
+                    Type::Type => todo!(),
+                })
+                .map(AbiParam::new)
+                .collect();
+            let mut returns = function
+                .signature
+                .returns
+                .iter()
+                .map(|typ| match typ {
+                    Type::Bool => I8,
+                    Type::I32 => I32,
+                    Type::Type => todo!(),
+                })
+                .map(AbiParam::new)
+                .collect::<Vec<_>>();
+            if *name == "main" {
+                returns.push(AbiParam::new(I32));
+            }
+
+            (
+                &**name,
+                Signature {
+                    params,
+                    returns,
+                    call_conv: isa.default_call_conv(),
+                },
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    let function_ids = function_signatures
+        .iter()
+        .map(|(&name, signature)| {
+            let func_id = if name == "main" {
+                object_module.declare_function(
+                    "main",
+                    Linkage::Export,
+                    signature,
+                )
+            } else {
+                object_module.declare_anonymous_function(signature)
+            }
+            .unwrap();
+            (name, func_id)
+        })
+        .collect();
+
     let mut compiler = Compiler {
+        program,
+        function_ids,
+        function_signatures,
         stack: Vec::new(),
-        pointer_type,
+        isa,
         object_module,
         extern_functions: HashMap::new(),
         extern_function_signatures,
         strings: HashMap::new(),
     };
-    compiler.compile(program, &mut fb);
-    fb.finalize();
-
-    compiler
-        .object_module
-        .define_function(main_func_id, &mut ctx)?;
+    compiler.compile()?;
 
     let mut data_ctx = DataContext::new();
     for (s, data_id) in &compiler.strings {
@@ -90,16 +131,19 @@ pub fn compile(
     Ok(())
 }
 
-struct Compiler {
+struct Compiler<'a> {
+    program: &'a crate::typ::CheckedProgram,
+    function_signatures: HashMap<&'a str, Signature>,
+    function_ids: HashMap<&'a str, FuncId>,
     stack: Vec<Value>,
-    pointer_type: Type,
+    isa: Arc<dyn TargetIsa>,
     object_module: ObjectModule,
     extern_functions: HashMap<&'static str, FuncId>,
     extern_function_signatures: HashMap<&'static str, Signature>,
     strings: HashMap<&'static str, DataId>,
 }
 
-impl Stack for Compiler {
+impl Stack for Compiler<'_> {
     type Item = Value;
 
     fn push(&mut self, element: Self::Item) {
@@ -111,7 +155,7 @@ impl Stack for Compiler {
     }
 }
 
-impl Compiler {
+impl Compiler<'_> {
     fn call_extern(
         &mut self,
         func_name: &'static str,
@@ -144,15 +188,53 @@ impl Compiler {
         });
         let global_value =
             self.object_module.declare_data_in_func(data_id, fb.func);
-        fb.ins().global_value(self.pointer_type, global_value)
+        fb.ins().global_value(self.isa.pointer_type(), global_value)
     }
 
-    fn compile(&mut self, program: &Program, fb: &mut FunctionBuilder) {
-        for instruction in &*program.instructions {
-            self.compile_instruction(instruction, fb);
+    fn compile(&mut self) -> Result<()> {
+        let mut ctx = Context::new();
+        let mut func_ctx = FunctionBuilderContext::new();
+
+        for (name, function) in self.program.functions() {
+            self.compile_function(name, function, &mut ctx, &mut func_ctx)?;
         }
-        let exit_code = fb.ins().iconst(I32, 0);
-        fb.ins().return_(&[exit_code]);
+
+        Ok(())
+    }
+
+    fn compile_function(
+        &mut self,
+        name: &str,
+        function: &crate::typ::CheckedFunction,
+        ctx: &mut Context,
+        func_ctx: &mut FunctionBuilderContext,
+    ) -> Result<()> {
+        let signature = self.function_signatures[name].clone();
+        let func_id = self.function_ids[name];
+        ctx.func =
+            Function::with_name_signature(UserFuncName::default(), signature);
+
+        let mut fb = FunctionBuilder::new(&mut ctx.func, func_ctx);
+        let block = fb.create_block();
+        fb.append_block_params_for_function_params(block);
+        self.stack = fb.block_params(block).to_vec();
+        fb.switch_to_block(block);
+        fb.seal_block(block);
+
+        for instruction in &*function.body {
+            self.compile_instruction(instruction, &mut fb);
+        }
+
+        if name == "main" {
+            // Exit code
+            self.stack.push(fb.ins().iconst(I32, 0));
+        }
+        fb.ins().return_(&self.stack);
+
+        fb.finalize();
+        self.object_module.define_function(func_id, ctx)?;
+
+        Ok(())
     }
 
     fn compile_instruction(
@@ -161,6 +243,19 @@ impl Compiler {
         fb: &mut FunctionBuilder,
     ) {
         match instruction {
+            Instruction::Call(name) => {
+                let function = &self.program.functions()[&**name];
+                let param_count = function.signature.parameters.len();
+                let func_id = self.function_ids[&**name];
+                let func_ref =
+                    self.object_module.declare_func_in_func(func_id, fb.func);
+                let inst = fb.ins().call(
+                    func_ref,
+                    &self.stack[self.stack.len() - param_count..],
+                );
+                self.stack.truncate(self.stack.len() - param_count);
+                self.stack.extend(fb.inst_results(inst));
+            }
             Instruction::Then(body) => self.compile_then(body, fb),
             Instruction::ThenElse(then, else_) => {
                 self.compile_then_else(then, else_, fb);
@@ -171,6 +266,7 @@ impl Compiler {
             Instruction::PushBool(b) => {
                 self.stack.push(fb.ins().iconst(I8, i64::from(*b)));
             }
+            Instruction::PushType(_) | Instruction::TypeOf => todo!(),
             Instruction::Print => {
                 let n = self.pop();
                 let fmt = self.allocate_str("%d\0", fb);

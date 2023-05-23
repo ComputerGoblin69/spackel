@@ -1,23 +1,40 @@
 use crate::{
-    ir::{BinLogicOp, BinMathOp, Comparison, Instruction, Program},
+    ir::{BinLogicOp, BinMathOp, Comparison, Instruction},
     stack::Stack,
+    typ::Type,
 };
 
-pub fn interpret(program: &crate::typ::Checked<Program>) {
-    Interpreter { stack: Vec::new() }.interpret(program);
+pub fn interpret(program: &crate::typ::CheckedProgram) {
+    Interpreter {
+        stack: Vec::new(),
+        program,
+    }
+    .interpret();
 }
 
 #[derive(Clone, Copy)]
 enum Value {
     Bool(bool),
     I32(i32),
+    Type(Type),
 }
 
-struct Interpreter {
+impl Value {
+    const fn typ(self) -> Type {
+        match self {
+            Self::Bool(_) => Type::Bool,
+            Self::I32(_) => Type::I32,
+            Self::Type(_) => Type::Type,
+        }
+    }
+}
+
+struct Interpreter<'a> {
+    program: &'a crate::typ::CheckedProgram,
     stack: Vec<Value>,
 }
 
-impl Stack for Interpreter {
+impl Stack for Interpreter<'_> {
     type Item = Value;
 
     fn push(&mut self, element: Self::Item) {
@@ -29,9 +46,9 @@ impl Stack for Interpreter {
     }
 }
 
-impl Interpreter {
-    fn interpret(&mut self, program: &Program) {
-        for instruction in &*program.instructions {
+impl Interpreter<'_> {
+    fn interpret(&mut self) {
+        for instruction in &*self.program.functions()["main"].body {
             self.interpret_instruction(instruction);
         }
     }
@@ -52,6 +69,12 @@ impl Interpreter {
 
     fn interpret_instruction(&mut self, instruction: &Instruction) {
         match instruction {
+            Instruction::Call(name) => {
+                let function = &self.program.functions()[&**name];
+                for instruction in &*function.body {
+                    self.interpret_instruction(instruction);
+                }
+            }
             Instruction::Then(body) => {
                 if self.pop_bool() {
                     for instruction in &**body {
@@ -67,6 +90,11 @@ impl Interpreter {
             }
             Instruction::PushI32(number) => self.push(Value::I32(*number)),
             Instruction::PushBool(b) => self.push(Value::Bool(*b)),
+            Instruction::PushType(typ) => self.push(Value::Type(*typ)),
+            Instruction::TypeOf => {
+                let a = self.pop();
+                self.push(Value::Type(a.typ()));
+            }
             Instruction::Print => print!("{}", self.pop_i32()),
             Instruction::Println => println!("{}", self.pop_i32()),
             #[allow(clippy::cast_sign_loss)]

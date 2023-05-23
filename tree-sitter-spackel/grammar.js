@@ -12,7 +12,13 @@ module.exports = grammar({
       seq("macro", field("name", $.word), repeat($._instruction), "end"),
 
     _instruction: $ =>
-      choice($.number, $.then_statement, $.then_else_statement, $.word),
+      choice(
+        $.number,
+        $.then_statement,
+        $.then_else_statement,
+        $.function_definition,
+        $.word
+      ),
 
     then_statement: $ => seq("then", repeat($._instruction), "end"),
 
@@ -24,6 +30,20 @@ module.exports = grammar({
         repeat($._instruction),
         "end"
       ),
+
+    function_definition: $ =>
+      seq(
+        "fn",
+        field("name", $.word),
+        ":",
+        $.function_signature,
+        field("body", $.block)
+      ),
+
+    function_signature: $ =>
+      seq(repeat($._instruction), "->", repeat($._instruction)),
+
+    block: $ => seq("do", repeat($._instruction), "end"),
 
     number: $ => /[+-]?\d+/,
 
