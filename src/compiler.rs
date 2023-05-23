@@ -211,6 +211,7 @@ impl Compiler<'_> {
     ) -> Result<()> {
         let signature = self.function_signatures[name].clone();
         let func_id = self.function_ids[name];
+        ctx.clear();
         ctx.func =
             Function::with_name_signature(UserFuncName::default(), signature);
 
