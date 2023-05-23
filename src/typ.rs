@@ -36,14 +36,14 @@ impl CheckedProgram {
 
 pub struct CheckedFunction {
     declaration_span: Span,
-    signature: FunctionSignature,
+    pub signature: FunctionSignature,
     pub body: Box<[Spanned<Instruction>]>,
 }
 
 #[derive(Clone)]
 pub struct FunctionSignature {
-    parameters: Box<[Type]>,
-    returns: Box<[Type]>,
+    pub parameters: Box<[Type]>,
+    pub returns: Box<[Type]>,
 }
 
 pub fn check(program: Program) -> Result<CheckedProgram> {

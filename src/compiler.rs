@@ -1,6 +1,7 @@
 use crate::{
     ir::{BinLogicOp, BinMathOp, Comparison, Instruction},
     stack::Stack,
+    typ::Type,
 };
 use anyhow::Result;
 use codemap::Spanned;
@@ -42,9 +43,69 @@ pub fn compile(
         [],
         cranelift_module::default_libcall_names(),
     )?;
-    let object_module = ObjectModule::new(object_builder);
+    let mut object_module = ObjectModule::new(object_builder);
+
+    let function_signatures = program
+        .functions()
+        .iter()
+        .map(|(name, function)| {
+            let params = function
+                .signature
+                .parameters
+                .iter()
+                .map(|typ| match typ {
+                    Type::Bool => I8,
+                    Type::I32 => I32,
+                    Type::Type => todo!(),
+                })
+                .map(AbiParam::new)
+                .collect();
+            let mut returns = function
+                .signature
+                .returns
+                .iter()
+                .map(|typ| match typ {
+                    Type::Bool => I8,
+                    Type::I32 => I32,
+                    Type::Type => todo!(),
+                })
+                .map(AbiParam::new)
+                .collect::<Vec<_>>();
+            if *name == "main" {
+                returns.push(AbiParam::new(I32));
+            }
+
+            (
+                &**name,
+                Signature {
+                    params,
+                    returns,
+                    call_conv: isa.default_call_conv(),
+                },
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    let function_ids = function_signatures
+        .iter()
+        .map(|(&name, signature)| {
+            let func_id = if name == "main" {
+                object_module.declare_function(
+                    "main",
+                    Linkage::Export,
+                    signature,
+                )
+            } else {
+                object_module.declare_anonymous_function(signature)
+            }
+            .unwrap();
+            (name, func_id)
+        })
+        .collect();
 
     let mut compiler = Compiler {
+        program,
+        function_ids,
+        function_signatures,
         stack: Vec::new(),
         isa,
         object_module,
@@ -52,7 +113,7 @@ pub fn compile(
         extern_function_signatures,
         strings: HashMap::new(),
     };
-    compiler.compile(program)?;
+    compiler.compile()?;
 
     let mut data_ctx = DataContext::new();
     for (s, data_id) in &compiler.strings {
@@ -70,7 +131,10 @@ pub fn compile(
     Ok(())
 }
 
-struct Compiler {
+struct Compiler<'a> {
+    program: &'a crate::typ::CheckedProgram,
+    function_signatures: HashMap<&'a str, Signature>,
+    function_ids: HashMap<&'a str, FuncId>,
     stack: Vec<Value>,
     isa: Arc<dyn TargetIsa>,
     object_module: ObjectModule,
@@ -79,7 +143,7 @@ struct Compiler {
     strings: HashMap<&'static str, DataId>,
 }
 
-impl Stack for Compiler {
+impl Stack for Compiler<'_> {
     type Item = Value;
 
     fn push(&mut self, element: Self::Item) {
@@ -91,7 +155,7 @@ impl Stack for Compiler {
     }
 }
 
-impl Compiler {
+impl Compiler<'_> {
     fn call_extern(
         &mut self,
         func_name: &'static str,
@@ -127,11 +191,11 @@ impl Compiler {
         fb.ins().global_value(self.isa.pointer_type(), global_value)
     }
 
-    fn compile(&mut self, program: &crate::typ::CheckedProgram) -> Result<()> {
+    fn compile(&mut self) -> Result<()> {
         let mut ctx = Context::new();
         let mut func_ctx = FunctionBuilderContext::new();
 
-        for (name, function) in program.functions() {
+        for (name, function) in self.program.functions() {
             self.compile_function(name, function, &mut ctx, &mut func_ctx)?;
         }
 
@@ -145,24 +209,15 @@ impl Compiler {
         ctx: &mut Context,
         func_ctx: &mut FunctionBuilderContext,
     ) -> Result<()> {
-        let signature = Signature {
-            params: Vec::new(),
-            returns: vec![AbiParam::new(I32)],
-            call_conv: self.isa.default_call_conv(),
-        };
-        let linkage = if name == "main" {
-            Linkage::Export
-        } else {
-            Linkage::Local
-        };
-        let func_id = self
-            .object_module
-            .declare_function(name, linkage, &signature)?;
+        let signature = self.function_signatures[name].clone();
+        let func_id = self.function_ids[name];
         ctx.func =
             Function::with_name_signature(UserFuncName::default(), signature);
 
         let mut fb = FunctionBuilder::new(&mut ctx.func, func_ctx);
         let block = fb.create_block();
+        fb.append_block_params_for_function_params(block);
+        self.stack = fb.block_params(block).to_vec();
         fb.switch_to_block(block);
         fb.seal_block(block);
 
@@ -188,7 +243,19 @@ impl Compiler {
         fb: &mut FunctionBuilder,
     ) {
         match instruction {
-            Instruction::Call(_name) => todo!(),
+            Instruction::Call(name) => {
+                let function = &self.program.functions()[&**name];
+                let param_count = function.signature.parameters.len();
+                let func_id = self.function_ids[&**name];
+                let func_ref =
+                    self.object_module.declare_func_in_func(func_id, fb.func);
+                let inst = fb.ins().call(
+                    func_ref,
+                    &self.stack[self.stack.len() - param_count..],
+                );
+                self.stack.truncate(self.stack.len() - param_count);
+                self.stack.extend(fb.inst_results(inst));
+            }
             Instruction::Then(body) => self.compile_then(body, fb),
             Instruction::ThenElse(then, else_) => {
                 self.compile_then_else(then, else_, fb);
