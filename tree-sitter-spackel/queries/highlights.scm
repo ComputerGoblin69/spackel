@@ -26,7 +26,7 @@
 
 (
  (word) @function.builtin
- (#match? @function.builtin "^(print|println|print-char|\\+|-|\\*|/|%|ß|<|<=|=|>|>=|not|and|or|xor|nand|nor|xnor|drop|dup|swap|over|nip|tuck|type-of)$")
+ (#match? @function.builtin "^(print|println|print-char|(f32\\.)?(\\+|-|\\*|/)|%|ß|<|<=|=|>|>=|not|and|or|xor|nand|nor|xnor|drop|dup|swap|over|nip|tuck|type-of)$")
 )
 
 (
