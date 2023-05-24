@@ -299,6 +299,17 @@ impl Compiler<'_> {
                     BinMathOp::SillyAdd => todo!(),
                 });
             }
+            Instruction::F32BinMathOp(op) => {
+                let b = self.pop();
+                let a = self.pop();
+                self.push(match op {
+                    BinMathOp::Add => fb.ins().fadd(a, b),
+                    BinMathOp::Sub => fb.ins().fsub(a, b),
+                    BinMathOp::Mul => fb.ins().fmul(a, b),
+                    BinMathOp::Div => fb.ins().fdiv(a, b),
+                    BinMathOp::Rem | BinMathOp::SillyAdd => unreachable!(),
+                });
+            }
             Instruction::Comparison(comparison) => {
                 let b = self.pop();
                 let a = self.pop();
