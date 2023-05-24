@@ -1,6 +1,6 @@
 (line_comment) @comment.line
 
-(number) @constant.numeric
+(int_literal) @constant.numeric
 
 "macro" @keyword.function
 (then_statement "end" @keyword.control.conditional .)

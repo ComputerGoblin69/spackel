@@ -13,7 +13,7 @@ module.exports = grammar({
 
     _instruction: $ =>
       choice(
-        $.number,
+        $.int_literal,
         $.then_statement,
         $.then_else_statement,
         $.function_definition,
@@ -45,7 +45,7 @@ module.exports = grammar({
 
     block: $ => seq("do", repeat($._instruction), "end"),
 
-    number: $ => /[+-]?\d+/,
+    int_literal: $ => /[+-]?\d+/,
 
     word: $ => /[^#\s]+/,
 
