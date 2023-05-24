@@ -14,6 +14,7 @@ module.exports = grammar({
     _instruction: $ =>
       choice(
         $.int_literal,
+        $.float_literal,
         $.then_statement,
         $.then_else_statement,
         $.function_definition,
@@ -46,6 +47,8 @@ module.exports = grammar({
     block: $ => seq("do", repeat($._instruction), "end"),
 
     int_literal: $ => /[+-]?\d+/,
+
+    float_literal: $ => /[+-]?(\d+(\.\d*)?|\d*\.\d+)([Ee][+-]?\d+)?/,
 
     word: $ => /[^#\s]+/,
 

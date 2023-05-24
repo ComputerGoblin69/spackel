@@ -1,6 +1,9 @@
 (line_comment) @comment.line
 
-(int_literal) @constant.numeric
+[
+  (int_literal)
+  (float_literal)
+] @constant.numeric
 
 "macro" @keyword.function
 (then_statement "end" @keyword.control.conditional .)
