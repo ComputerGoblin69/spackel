@@ -268,6 +268,7 @@ pub enum Instruction {
     Then(Block),
     ThenElse(Block, Block),
     PushI32(i32),
+    PushF32(f32),
     PushBool(bool),
     PushType(Type),
     TypeOf,
@@ -325,9 +326,15 @@ impl TryFrom<Token<'_>> for Instruction {
             "over" => Self::Over,
             "nip" => Self::Nip,
             "tuck" => Self::Tuck,
-            _ => token
-                .parse()
-                .map_or_else(|_| Self::Call(token.text.into()), Self::PushI32),
+            _ => {
+                if let Ok(number) = token.parse() {
+                    Self::PushI32(number)
+                } else if let Ok(number) = token.parse() {
+                    Self::PushF32(number)
+                } else {
+                    Self::Call(token.text.into())
+                }
+            }
         })
     }
 }

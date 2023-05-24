@@ -16,6 +16,7 @@ pub fn interpret(program: &crate::typ::CheckedProgram) {
 enum Value {
     Bool(bool),
     I32(i32),
+    F32(f32),
     Type(Type),
 }
 
@@ -24,6 +25,7 @@ impl Value {
         match self {
             Self::Bool(_) => Type::Bool,
             Self::I32(_) => Type::I32,
+            Self::F32(_) => Type::F32,
             Self::Type(_) => Type::Type,
         }
     }
@@ -89,6 +91,7 @@ impl Interpreter<'_> {
                 }
             }
             Instruction::PushI32(number) => self.push(Value::I32(*number)),
+            Instruction::PushF32(number) => self.push(Value::F32(*number)),
             Instruction::PushBool(b) => self.push(Value::Bool(*b)),
             Instruction::PushType(typ) => self.push(Value::Type(*typ)),
             Instruction::TypeOf => {

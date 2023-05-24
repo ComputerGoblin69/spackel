@@ -11,6 +11,7 @@ use std::{collections::HashMap, fmt};
 pub enum Type {
     Bool,
     I32,
+    F32,
     Type,
 }
 
@@ -19,6 +20,7 @@ impl fmt::Display for Type {
         f.write_str(match self {
             Self::Bool => "bool",
             Self::I32 => "i32",
+            Self::F32 => "f32",
             Self::Type => "type",
         })
     }
@@ -203,7 +205,7 @@ impl Checker {
     ) -> Result<()> {
         use Parameter::{Any, Concrete as P};
         use Return::{Concrete as R, Get};
-        use Type::{Bool, I32};
+        use Type::{Bool, F32, I32};
 
         let parameters;
         let returns;
@@ -243,6 +245,7 @@ impl Checker {
                 (&[P(Bool)], &[])
             }
             Instruction::PushI32(_) => (&[], &[R(I32)]),
+            Instruction::PushF32(_) => (&[], &[R(F32)]),
             Instruction::PushBool(_) => (&[], &[R(Bool)]),
             Instruction::PushType(_) => (&[], &[R(Type::Type)]),
             Instruction::TypeOf => (&[Any], &[R(Type::Type)]),

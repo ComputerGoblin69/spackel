@@ -40,6 +40,7 @@ you, including ensuring that the runtime and the compiler itself are up to date:
 ## Data types
 
 - `i32`: the signed 32-bit integer type.
+- `f32`: single precision floating point numbers.
 - `bool`: boolean `true` or `false`.
 - `type`: the type of types. If you run into Girard's paradox because of this,
   please file an issue.
@@ -93,6 +94,7 @@ now.
 ### Constants
 
 - Integers: at least one decimal digit, optionally preceded by a `+` or `-`.
+- Floats: whatever `<f32 as FromStr>` handles in Rust.
 - Booleans: `true` or `false`.
 - `ß`: pushes the number 1945.
 

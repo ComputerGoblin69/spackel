@@ -12,7 +12,7 @@ use cranelift::prelude::{
     },
     isa::TargetIsa,
     settings,
-    types::{I32, I8},
+    types::{F32, I32, I8},
     AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext,
     InstBuilder, IntCC, Signature, Value,
 };
@@ -56,6 +56,7 @@ pub fn compile(
                 .map(|typ| match typ {
                     Type::Bool => I8,
                     Type::I32 => I32,
+                    Type::F32 => F32,
                     Type::Type => todo!(),
                 })
                 .map(AbiParam::new)
@@ -67,6 +68,7 @@ pub fn compile(
                 .map(|typ| match typ {
                     Type::Bool => I8,
                     Type::I32 => I32,
+                    Type::F32 => F32,
                     Type::Type => todo!(),
                 })
                 .map(AbiParam::new)
@@ -263,6 +265,9 @@ impl Compiler<'_> {
             }
             Instruction::PushI32(number) => {
                 self.stack.push(fb.ins().iconst(I32, i64::from(*number)));
+            }
+            Instruction::PushF32(number) => {
+                self.stack.push(fb.ins().f32const(*number));
             }
             Instruction::PushBool(b) => {
                 self.stack.push(fb.ins().iconst(I8, i64::from(*b)));
