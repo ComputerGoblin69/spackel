@@ -261,6 +261,7 @@ impl Compiler<'_> {
             Instruction::ThenElse(then, else_) => {
                 self.compile_then_else(then, else_, fb);
             }
+            Instruction::Repeat { body, .. } => todo!(),
             Instruction::PushI32(number) => {
                 self.stack.push(fb.ins().iconst(I32, i64::from(*number)));
             }

@@ -88,6 +88,14 @@ impl Interpreter<'_> {
                     self.interpret_instruction(instruction);
                 }
             }
+            Instruction::Repeat { body, .. } => {
+                while {
+                    for instruction in &**body {
+                        self.interpret_instruction(instruction);
+                    }
+                    self.pop_bool()
+                } {}
+            }
             Instruction::PushI32(number) => self.push(Value::I32(*number)),
             Instruction::PushBool(b) => self.push(Value::Bool(*b)),
             Instruction::PushType(typ) => self.push(Value::Type(*typ)),
