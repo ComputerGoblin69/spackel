@@ -251,6 +251,7 @@ impl Checker {
             Instruction::TypeOf => (&[Any], &[R(Type::Type)]),
             Instruction::BinMathOp(_) => (&[P(I32); 2], &[R(I32)]),
             Instruction::F32BinMathOp(_) => (&[P(F32); 2], &[R(F32)]),
+            Instruction::Sqrt => (&[P(F32)], &[R(F32)]),
             Instruction::Comparison(_) => (&[P(I32); 2], &[R(Bool)]),
             Instruction::Print
             | Instruction::Println

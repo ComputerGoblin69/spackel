@@ -116,6 +116,8 @@ for both integers and floats default to `i32`. To handle `f32` instead, use the
     - $10+9 = 21$
     - $1+1 = 1$
 
+- `sqrt`: square root.
+
 ### Comparisons
 
 - `<`: less than.

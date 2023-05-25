@@ -141,6 +141,10 @@ impl Interpreter<'_> {
                     BinMathOp::Rem | BinMathOp::SillyAdd => unreachable!(),
                 }));
             }
+            Instruction::Sqrt => {
+                let n = self.pop_f32();
+                self.push(Value::F32(n.sqrt()));
+            }
             Instruction::Comparison(comparison) => {
                 let b = self.pop_i32();
                 let a = self.pop_i32();

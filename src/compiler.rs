@@ -310,6 +310,10 @@ impl Compiler<'_> {
                     BinMathOp::Rem | BinMathOp::SillyAdd => unreachable!(),
                 });
             }
+            Instruction::Sqrt => {
+                let n = self.pop();
+                self.push(fb.ins().sqrt(n));
+            }
             Instruction::Comparison(comparison) => {
                 let b = self.pop();
                 let a = self.pop();
