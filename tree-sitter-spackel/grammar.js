@@ -16,6 +16,7 @@ module.exports = grammar({
         $.number,
         $.then_statement,
         $.then_else_statement,
+        $.repeat_loop,
         $.function_definition,
         $.word
       ),
@@ -30,6 +31,8 @@ module.exports = grammar({
         repeat($._instruction),
         "end"
       ),
+
+    repeat_loop: $ => seq("repeat", repeat($._instruction), "end"),
 
     function_definition: $ =>
       seq(

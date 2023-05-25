@@ -5,6 +5,7 @@
 "macro" @keyword.function
 (then_statement "end" @keyword.control.conditional .)
 (then_else_statement "end" @keyword.control.conditional .)
+(repeat_loop "end" @keyword.control.control.loop .)
 [
   "do"
   "end"
@@ -13,6 +14,7 @@
   "then"
   "else"
 ] @keyword.control.conditional
+"repeat" @keyword.control.loop
 "fn" @keyword.function
 
 ":" @punctuation.delimiter
