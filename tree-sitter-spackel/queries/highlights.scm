@@ -22,7 +22,7 @@
   name: (word) @function.macro)
 
 (function_definition
-  name: (word) @function.macro)
+  name: (word) @function)
 
 (
  (word) @function.builtin
