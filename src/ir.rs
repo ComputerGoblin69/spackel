@@ -334,9 +334,9 @@ impl TryFrom<Token<'_>> for Instruction {
             "nip" => Self::Nip,
             "tuck" => Self::Tuck,
             _ => {
-                if let Ok(number) = token.parse() {
+                if let Ok(number) = token.parse::<i32>() {
                     Self::PushI32(number)
-                } else if let Ok(number) = token.parse() {
+                } else if let Ok(number) = token.parse::<f32>() {
                     Self::PushF32(number)
                 } else {
                     Self::Call(token.text.into())
