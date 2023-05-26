@@ -261,7 +261,7 @@ impl Compiler<'_> {
             Instruction::ThenElse(then, else_) => {
                 self.compile_then_else(then, else_, fb);
             }
-            Instruction::Repeat { body, .. } => todo!(),
+            Instruction::Repeat { body, .. } => self.compile_repeat(body, fb),
             Instruction::PushI32(number) => {
                 self.stack.push(fb.ins().iconst(I32, i64::from(*number)));
             }
@@ -419,6 +419,37 @@ impl Compiler<'_> {
 
         fb.switch_to_block(after_block);
         self.stack = params_after;
+    }
+
+    fn compile_repeat(
+        &mut self,
+        body: &[Spanned<Instruction>],
+        fb: &mut FunctionBuilder,
+    ) {
+        let loop_block = fb.create_block();
+        let after_block = fb.create_block();
+
+        let loop_params = self
+            .stack
+            .iter()
+            .map(|&value| {
+                fb.append_block_param(loop_block, fb.func.dfg.value_type(value))
+            })
+            .collect();
+
+        fb.ins().jump(loop_block, &self.stack);
+        fb.switch_to_block(loop_block);
+        self.stack = loop_params;
+        for instruction in body {
+            self.compile_instruction(instruction, fb);
+        }
+        let condition = self.pop();
+        fb.ins()
+            .brif(condition, loop_block, &self.stack, after_block, &[]);
+        fb.seal_block(loop_block);
+        fb.seal_block(after_block);
+
+        fb.switch_to_block(after_block);
     }
 }
 
