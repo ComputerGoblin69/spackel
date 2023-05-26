@@ -284,6 +284,7 @@ pub enum Instruction {
     ThenElse(Block, Block),
     Repeat { body: Block, end_span: Span },
     PushI32(i32),
+    PushF32(f32),
     PushBool(bool),
     PushType(Type),
     TypeOf,
@@ -291,6 +292,8 @@ pub enum Instruction {
     Println,
     PrintChar,
     BinMathOp(BinMathOp),
+    F32BinMathOp(BinMathOp),
+    Sqrt,
     Comparison(Comparison),
     Not,
     BinLogicOp(BinLogicOp),
@@ -320,8 +323,13 @@ impl TryFrom<Token<'_>> for Instruction {
             "-" => Self::BinMathOp(BinMathOp::Sub),
             "*" => Self::BinMathOp(BinMathOp::Mul),
             "/" => Self::BinMathOp(BinMathOp::Div),
+            "f32.+" => Self::F32BinMathOp(BinMathOp::Add),
+            "f32.-" => Self::F32BinMathOp(BinMathOp::Sub),
+            "f32.*" => Self::F32BinMathOp(BinMathOp::Mul),
+            "f32./" => Self::F32BinMathOp(BinMathOp::Div),
             "%" => Self::BinMathOp(BinMathOp::Rem),
             "+🤡" => Self::BinMathOp(BinMathOp::SillyAdd),
+            "sqrt" => Self::Sqrt,
             "<" => Self::Comparison(Comparison::Lt),
             "<=" => Self::Comparison(Comparison::Le),
             "=" => Self::Comparison(Comparison::Eq),
@@ -341,9 +349,15 @@ impl TryFrom<Token<'_>> for Instruction {
             "over" => Self::Over,
             "nip" => Self::Nip,
             "tuck" => Self::Tuck,
-            _ => token
-                .parse()
-                .map_or_else(|_| Self::Call(token.text.into()), Self::PushI32),
+            _ => {
+                if let Ok(number) = token.parse::<i32>() {
+                    Self::PushI32(number)
+                } else if let Ok(number) = token.parse::<f32>() {
+                    Self::PushF32(number)
+                } else {
+                    Self::Call(token.text.into())
+                }
+            }
         })
     }
 }

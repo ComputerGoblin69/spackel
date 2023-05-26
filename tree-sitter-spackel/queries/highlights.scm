@@ -1,6 +1,9 @@
 (line_comment) @comment.line
 
-(number) @constant.numeric
+[
+  (int_literal)
+  (float_literal)
+] @constant.numeric
 
 "macro" @keyword.function
 (then_statement "end" @keyword.control.conditional .)
@@ -28,7 +31,7 @@
 
 (
  (word) @function.builtin
- (#match? @function.builtin "^(print|println|print-char|\\+|-|\\*|/|%|ß|<|<=|=|>|>=|not|and|or|xor|nand|nor|xnor|drop|dup|swap|over|nip|tuck|type-of)$")
+ (#match? @function.builtin "^(print|println|print-char|(f32\\.)?(\\+|-|\\*|/)|%|ß|sqrt|<|<=|=|>|>=|not|and|or|xor|nand|nor|xnor|drop|dup|swap|over|nip|tuck|type-of)$")
 )
 
 (

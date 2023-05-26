@@ -16,6 +16,7 @@ pub fn interpret(program: &crate::typ::CheckedProgram) {
 enum Value {
     Bool(bool),
     I32(i32),
+    F32(f32),
     Type(Type),
 }
 
@@ -24,6 +25,7 @@ impl Value {
         match self {
             Self::Bool(_) => Type::Bool,
             Self::I32(_) => Type::I32,
+            Self::F32(_) => Type::F32,
             Self::Type(_) => Type::Type,
         }
     }
@@ -56,6 +58,13 @@ impl Interpreter<'_> {
     fn pop_i32(&mut self) -> i32 {
         match self.pop() {
             Value::I32(n) => n,
+            _ => unreachable!(),
+        }
+    }
+
+    fn pop_f32(&mut self) -> f32 {
+        match self.pop() {
+            Value::F32(n) => n,
             _ => unreachable!(),
         }
     }
@@ -97,6 +106,7 @@ impl Interpreter<'_> {
                 } {}
             }
             Instruction::PushI32(number) => self.push(Value::I32(*number)),
+            Instruction::PushF32(number) => self.push(Value::F32(*number)),
             Instruction::PushBool(b) => self.push(Value::Bool(*b)),
             Instruction::PushType(typ) => self.push(Value::Type(*typ)),
             Instruction::TypeOf => {
@@ -127,6 +137,21 @@ impl Interpreter<'_> {
                         _ => a + b,
                     },
                 }));
+            }
+            Instruction::F32BinMathOp(op) => {
+                let b = self.pop_f32();
+                let a = self.pop_f32();
+                self.push(Value::F32(match op {
+                    BinMathOp::Add => a + b,
+                    BinMathOp::Sub => a - b,
+                    BinMathOp::Mul => a * b,
+                    BinMathOp::Div => a / b,
+                    BinMathOp::Rem | BinMathOp::SillyAdd => unreachable!(),
+                }));
+            }
+            Instruction::Sqrt => {
+                let n = self.pop_f32();
+                self.push(Value::F32(n.sqrt()));
             }
             Instruction::Comparison(comparison) => {
                 let b = self.pop_i32();

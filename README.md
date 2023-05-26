@@ -40,6 +40,7 @@ you, including ensuring that the runtime and the compiler itself are up to date:
 ## Data types
 
 - `i32`: the signed 32-bit integer type.
+- `f32`: single precision floating point numbers.
 - `bool`: boolean `true` or `false`.
 - `type`: the type of types. If you run into Girard's paradox because of this,
   please file an issue.
@@ -96,10 +97,15 @@ now.
 ### Constants
 
 - Integers: at least one decimal digit, optionally preceded by a `+` or `-`.
+- Floats: whatever `<f32 as FromStr>` handles in Rust.
 - Booleans: `true` or `false`.
 - `ß`: pushes the number 1945.
 
 ### Math
+
+Due to limitations in Spackel's type system, math operations that make sense
+for both integers and floats default to `i32`. To handle `f32` instead, use the
+`f32.` prefix, e.g. `f32.+` to add floats.
 
 - Binary operators (these take two numbers as arguments and produce one number):
   - `+`: addition.
@@ -112,6 +118,8 @@ now.
     - $9+10 = 21$
     - $10+9 = 21$
     - $1+1 = 1$
+
+- `sqrt`: square root.
 
 ### Comparisons
 
