@@ -242,6 +242,7 @@ impl Checker {
             Instruction::Then(_) | Instruction::ThenElse(..) => {
                 (&[P(Bool)], &[])
             }
+            Instruction::Repeat { body, .. } => (&[], &[]),
             Instruction::PushI32(_) => (&[], &[R(I32)]),
             Instruction::PushBool(_) => (&[], &[R(Bool)]),
             Instruction::PushType(_) => (&[], &[R(Type::Type)]),
@@ -295,6 +296,24 @@ impl Checker {
                         format!(
                             "`then else` statement diverges between types `{}` and `{}`",
                             then_types.iter().format(" "),
+                            self.stack.iter().format(" "),
+                        ),
+                        vec![primary_label(instruction.span, "")],
+                    ),
+                );
+            }
+            Instruction::Repeat { body, end_span } => {
+                let before = self.stack.clone();
+                for instruction in &**body {
+                    self.check_instruction(instruction)?;
+                }
+                self.transform(&[P(Bool)], &[], *end_span)?;
+                ensure!(
+                    before == self.stack,
+                    diagnostics::error(
+                        format!(
+                            "`repeat` loop changes types from `{}` to `{}`",
+                            before.iter().format(" "),
                             self.stack.iter().format(" "),
                         ),
                         vec![primary_label(instruction.span, "")],

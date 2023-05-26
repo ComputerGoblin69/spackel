@@ -73,7 +73,7 @@ fn expand_macros<'a>(
                         ],
                     )
                     .into())),
-                    "then" => {
+                    "then" | "repeat" => {
                         layers += 1;
                         Some(Ok(vec![token]))
                     }
@@ -173,6 +173,21 @@ fn instructions_until_terminator<'a>(
                     )),
                 }
             }
+            "repeat" => {
+                let (body, terminator) = instructions_until_terminator(tokens)?;
+                let terminator = terminator
+                    .ok_or_else(|| unterminated("`repeat` loop", token))?;
+                match &*terminator {
+                    "end" => Spanned {
+                        span: token.span.merge(terminator.span),
+                        node: Instruction::Repeat {
+                            body,
+                            end_span: terminator.span,
+                        },
+                    },
+                    _ => bail!(unexpected_token(terminator, "expected `end`",)),
+                }
+            }
             _ => Spanned {
                 span: token.span,
                 node: token.try_into()?,
@@ -257,7 +272,7 @@ impl Function {
 fn is_keyword(token: &str) -> bool {
     matches!(
         token,
-        "macro" | "then" | "else" | "end" | "do" | "fn" | ":" | "->"
+        "macro" | "then" | "else" | "repeat" | "end" | "do" | "fn" | ":" | "->"
     )
 }
 
@@ -267,6 +282,7 @@ pub enum Instruction {
     Call(Box<str>),
     Then(Block),
     ThenElse(Block, Block),
+    Repeat { body: Block, end_span: Span },
     PushI32(i32),
     PushBool(bool),
     PushType(Type),

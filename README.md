@@ -70,6 +70,9 @@ definition of a new macro.
 - `then BODY end`: pops a boolean and runs `BODY` if it is true.
 - `then THEN else ELSE end`: pops a boolean and runs `THEN` if it is true or
   `ELSE` if it is false.
+- `repeat BODY end`: the loop body produces a boolean that decides whether to
+  loop again. Like the `do while` loop in C, this always runs the body at least
+  once.
 
 ## User-defined functions
 
