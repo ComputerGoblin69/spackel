@@ -242,7 +242,7 @@ impl Checker {
             Instruction::Then(_) | Instruction::ThenElse(..) => {
                 (&[P(Bool)], &[])
             }
-            Instruction::Repeat { body, .. } => (&[], &[]),
+            Instruction::Repeat { .. } => (&[], &[]),
             Instruction::PushI32(_) => (&[], &[R(I32)]),
             Instruction::PushBool(_) => (&[], &[R(Bool)]),
             Instruction::PushType(_) => (&[], &[R(Type::Type)]),
