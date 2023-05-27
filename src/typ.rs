@@ -5,7 +5,10 @@ use crate::{
 use anyhow::{ensure, Context, Result};
 use codemap::{Span, Spanned};
 use itertools::Itertools;
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::HashMap,
+    fmt::{self, Write as _},
+};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Type {
@@ -141,11 +144,12 @@ impl Checker {
         }
 
         self.transform(
+            &[],
             &self.function_signatures[name]
                 .returns
                 .iter()
                 .copied()
-                .map(Parameter::Concrete)
+                .map(Pattern::Concrete)
                 .collect::<Box<_>>(),
             &[],
             function.end_span,
@@ -170,46 +174,53 @@ impl Checker {
 
     fn transform(
         &mut self,
-        inputs: &[Parameter],
-        outputs: &[Return],
+        generics: &[char],
+        parameters: &[Pattern],
+        returns: &[Pattern],
         span: Span,
     ) -> Result<()> {
-        ensure!(
-            (self.stack.len() >= inputs.len()
-                && self.stack[self.stack.len() - inputs.len()..] == *inputs),
+        Signature {
+            parameters,
+            returns,
+        }
+        .apply(self)
+        .map_err(|()| {
+            let mut label = format!(
+                "expected types `{}` ",
+                parameters
+                    .iter()
+                    .map(|pattern| pattern.display(generics))
+                    .format(" "),
+            );
+            if !generics.is_empty() {
+                write!(
+                    label,
+                    "for some {:#} ",
+                    generics.iter().copied().map(Generic).format(", ")
+                )
+                .unwrap();
+            }
+            write!(label, "but got `{}`", self.stack.iter().format(" "))
+                .unwrap();
+
             diagnostics::error(
                 "type mismatch".to_owned(),
-                vec![primary_label(
-                    span,
-                    format!(
-                        "expected types `{}` but got `{}`",
-                        inputs.iter().format(" "),
-                        self.stack.iter().format(" ")
-                    )
-                )],
-            ),
-        );
-        let new_len = self.stack.len() - inputs.len();
-        let consumed = self.stack.split_off(new_len);
-
-        self.stack.extend(outputs.iter().map(|&out| match out {
-            Return::Concrete(typ) => typ,
-            Return::Get(i) => consumed[i],
-        }));
-        Ok(())
+                vec![primary_label(span, label)],
+            )
+            .into()
+        })
     }
 
     fn check_instruction(
         &mut self,
         instruction: &Spanned<Instruction>,
     ) -> Result<()> {
-        use Parameter::{Any, Concrete as P};
-        use Return::{Concrete as R, Get};
+        use Pattern::{Concrete as C, Generic as G};
         use Type::{Bool, F32, I32};
 
         let parameters;
         let returns;
-        let (inputs, outputs): (&[Parameter], &[Return]) = match &**instruction
+        let (g, i, o): (&[char], &[Pattern], &[Pattern]) = match &**instruction
         {
             Instruction::Call(name) => {
                 ensure!(
@@ -231,42 +242,46 @@ impl Checker {
                     .parameters
                     .iter()
                     .copied()
-                    .map(P)
+                    .map(C)
                     .collect::<Box<_>>();
                 returns = signature
                     .returns
                     .iter()
                     .copied()
-                    .map(R)
+                    .map(C)
                     .collect::<Box<_>>();
-                (&*parameters, &*returns)
+                (&[], &*parameters, &*returns)
             }
             Instruction::Then(_) | Instruction::ThenElse(..) => {
-                (&[P(Bool)], &[])
+                (&[], &[C(Bool)], &[])
             }
-            Instruction::Repeat { .. } => (&[], &[]),
-            Instruction::PushI32(_) => (&[], &[R(I32)]),
-            Instruction::PushF32(_) => (&[], &[R(F32)]),
-            Instruction::PushBool(_) => (&[], &[R(Bool)]),
-            Instruction::PushType(_) => (&[], &[R(Type::Type)]),
-            Instruction::TypeOf => (&[Any], &[R(Type::Type)]),
-            Instruction::BinMathOp(_) => (&[P(I32); 2], &[R(I32)]),
-            Instruction::F32BinMathOp(_) => (&[P(F32); 2], &[R(F32)]),
-            Instruction::Sqrt => (&[P(F32)], &[R(F32)]),
-            Instruction::Comparison(_) => (&[P(I32); 2], &[R(Bool)]),
+            Instruction::Repeat { .. } => (&[], &[], &[]),
+            Instruction::PushI32(_) => (&[], &[], &[C(I32)]),
+            Instruction::PushF32(_) => (&[], &[], &[C(F32)]),
+            Instruction::PushBool(_) => (&[], &[], &[C(Bool)]),
+            Instruction::PushType(_) => (&[], &[], &[C(Type::Type)]),
+            Instruction::TypeOf => (&['T'], &[G(0)], &[C(Type::Type)]),
+            Instruction::BinMathOp(_) => (&[], &[C(I32); 2], &[C(I32)]),
+            Instruction::F32BinMathOp(_) => (&[], &[C(F32); 2], &[C(F32)]),
+            Instruction::Sqrt => (&[], &[C(F32)], &[C(F32)]),
+            Instruction::Comparison(_) => (&[], &[C(I32); 2], &[C(Bool)]),
             Instruction::Print
             | Instruction::Println
-            | Instruction::PrintChar => (&[P(I32)], &[]),
-            Instruction::Not => (&[P(Bool)], &[R(Bool)]),
-            Instruction::BinLogicOp(_) => (&[P(Bool); 2], &[R(Bool)]),
-            Instruction::Drop => (&[Any], &[]),
-            Instruction::Dup => (&[Any], &[Get(0); 2]),
-            Instruction::Swap => (&[Any; 2], &[Get(1), Get(0)]),
-            Instruction::Over => (&[Any; 2], &[Get(0), Get(1), Get(0)]),
-            Instruction::Nip => (&[Any; 2], &[Get(1)]),
-            Instruction::Tuck => (&[Any; 2], &[Get(1), Get(0), Get(1)]),
+            | Instruction::PrintChar => (&[], &[C(I32)], &[]),
+            Instruction::Not => (&[], &[C(Bool)], &[C(Bool)]),
+            Instruction::BinLogicOp(_) => (&[], &[C(Bool); 2], &[C(Bool)]),
+            Instruction::Drop => (&['T'], &[G(0)], &[]),
+            Instruction::Dup => (&['T'], &[G(0)], &[G(0); 2]),
+            Instruction::Swap => (&['A', 'B'], &[G(0), G(1)], &[G(1), G(0)]),
+            Instruction::Over => {
+                (&['A', 'B'], &[G(0), G(1)], &[G(0), G(1), G(0)])
+            }
+            Instruction::Nip => (&['A', 'B'], &[G(0), G(1)], &[G(1)]),
+            Instruction::Tuck => {
+                (&['A', 'B'], &[G(0), G(1)], &[G(1), G(0), G(1)])
+            }
         };
-        self.transform(inputs, outputs, instruction.span)?;
+        self.transform(g, i, o, instruction.span)?;
 
         match &**instruction {
             Instruction::Then(body) => {
@@ -312,7 +327,7 @@ impl Checker {
                 for instruction in &**body {
                     self.check_instruction(instruction)?;
                 }
-                self.transform(&[P(Bool)], &[], *end_span)?;
+                self.transform(&[], &[C(Bool)], &[], *end_span)?;
                 ensure!(
                     before == self.stack,
                     diagnostics::error(
@@ -332,32 +347,94 @@ impl Checker {
     }
 }
 
-#[derive(Clone, Copy)]
-enum Parameter {
-    Concrete(Type),
-    Any,
+struct Signature<'a> {
+    parameters: &'a [Pattern],
+    returns: &'a [Pattern],
 }
 
-impl PartialEq<Parameter> for Type {
-    fn eq(&self, other: &Parameter) -> bool {
-        match other {
-            Parameter::Concrete(typ) => self == typ,
-            Parameter::Any => true,
+impl Signature<'_> {
+    fn apply(&self, checker: &mut Checker) -> Result<(), ()> {
+        if checker.stack.len() < self.parameters.len() {
+            return Err(());
+        }
+        let new_len = checker.stack.len() - self.parameters.len();
+        let consumed = checker.stack.split_off(new_len);
+
+        let mut generics = Vec::new();
+
+        for (parameter, &argument) in std::iter::zip(self.parameters, &consumed)
+        {
+            match parameter {
+                Pattern::Concrete(typ) => {
+                    if argument != *typ {
+                        return Err(());
+                    }
+                }
+                Pattern::Generic(i) => {
+                    if let Some(generic) = generics.get(usize::from(*i)) {
+                        if argument != *generic {
+                            return Err(());
+                        }
+                    } else {
+                        generics.push(argument);
+                    }
+                }
+            }
+        }
+
+        checker
+            .stack
+            .extend(self.returns.iter().map(|out| match out {
+                Pattern::Concrete(typ) => *typ,
+                Pattern::Generic(i) => consumed[usize::from(*i)],
+            }));
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Pattern {
+    Concrete(Type),
+    Generic(u8),
+}
+
+impl Pattern {
+    const fn display(self, generics: &[char]) -> DisplayPattern {
+        DisplayPattern {
+            pattern: self,
+            generics,
         }
     }
 }
 
-impl fmt::Display for Parameter {
+struct DisplayPattern<'a> {
+    pattern: Pattern,
+    generics: &'a [char],
+}
+
+impl fmt::Display for DisplayPattern<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Concrete(typ) => typ.fmt(f),
-            Self::Any => f.write_str("<any>"),
+        match self.pattern {
+            Pattern::Concrete(typ) => typ.fmt(f),
+            Pattern::Generic(i) => {
+                Generic(self.generics[usize::from(i)]).fmt(f)
+            }
         }
     }
 }
 
-#[derive(Clone, Copy)]
-enum Return {
-    Concrete(Type),
-    Get(usize),
+struct Generic(char);
+
+impl fmt::Display for Generic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            f.write_char('`')?;
+        }
+        write!(f, "<{}>", self.0)?;
+        if f.alternate() {
+            f.write_char('`')?;
+        }
+        Ok(())
+    }
 }
