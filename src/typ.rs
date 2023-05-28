@@ -358,11 +358,11 @@ impl Signature<'_> {
             return Err(());
         }
         let new_len = checker.stack.len() - self.parameters.len();
-        let consumed = checker.stack.split_off(new_len);
+        let consumed = &checker.stack[new_len..];
 
         let mut generics = Vec::new();
 
-        for (parameter, &argument) in std::iter::zip(self.parameters, &consumed)
+        for (parameter, &argument) in std::iter::zip(self.parameters, consumed)
         {
             match parameter {
                 Pattern::Concrete(typ) => {
@@ -382,6 +382,7 @@ impl Signature<'_> {
             }
         }
 
+        let consumed = checker.stack.split_off(new_len);
         checker
             .stack
             .extend(self.returns.iter().map(|out| match out {
