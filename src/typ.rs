@@ -174,7 +174,7 @@ impl Checker {
 
     fn transform(
         &mut self,
-        generics: &[char],
+        generics: &[Generic],
         parameters: &[Pattern],
         returns: &[Pattern],
         span: Span,
@@ -193,12 +193,8 @@ impl Checker {
                     .format(" "),
             );
             if !generics.is_empty() {
-                write!(
-                    label,
-                    "for some {:#} ",
-                    generics.iter().copied().map(Generic).format(", ")
-                )
-                .unwrap();
+                write!(label, "for some {:#} ", generics.iter().format(", "))
+                    .unwrap();
             }
             write!(label, "but got `{}`", self.stack.iter().format(" "))
                 .unwrap();
@@ -215,13 +211,13 @@ impl Checker {
         &mut self,
         instruction: &Spanned<Instruction>,
     ) -> Result<()> {
+        use Generic as any;
         use Pattern::{Concrete as C, Generic as G};
         use Type::{Bool, F32, I32};
 
         let parameters;
         let returns;
-        let (g, i, o): (&[char], &[Pattern], &[Pattern]) = match &**instruction
-        {
+        let (g, i, o): (&[_], &[Pattern], &[Pattern]) = match &**instruction {
             Instruction::Call(name) => {
                 ensure!(
                     **name != *"main",
@@ -260,7 +256,7 @@ impl Checker {
             Instruction::PushF32(_) => (&[], &[], &[C(F32)]),
             Instruction::PushBool(_) => (&[], &[], &[C(Bool)]),
             Instruction::PushType(_) => (&[], &[], &[C(Type::Type)]),
-            Instruction::TypeOf => (&['T'], &[G(0)], &[C(Type::Type)]),
+            Instruction::TypeOf => (&[any('T')], &[G(0)], &[C(Type::Type)]),
             Instruction::BinMathOp(_) => (&[], &[C(I32); 2], &[C(I32)]),
             Instruction::F32BinMathOp(_) => (&[], &[C(F32); 2], &[C(F32)]),
             Instruction::Sqrt => (&[], &[C(F32)], &[C(F32)]),
@@ -270,15 +266,17 @@ impl Checker {
             | Instruction::PrintChar => (&[], &[C(I32)], &[]),
             Instruction::Not => (&[], &[C(Bool)], &[C(Bool)]),
             Instruction::BinLogicOp(_) => (&[], &[C(Bool); 2], &[C(Bool)]),
-            Instruction::Drop => (&['T'], &[G(0)], &[]),
-            Instruction::Dup => (&['T'], &[G(0)], &[G(0); 2]),
-            Instruction::Swap => (&['A', 'B'], &[G(0), G(1)], &[G(1), G(0)]),
-            Instruction::Over => {
-                (&['A', 'B'], &[G(0), G(1)], &[G(0), G(1), G(0)])
+            Instruction::Drop => (&[any('T')], &[G(0)], &[]),
+            Instruction::Dup => (&[any('T')], &[G(0)], &[G(0); 2]),
+            Instruction::Swap => {
+                (&[any('A'), any('B')], &[G(0), G(1)], &[G(1), G(0)])
             }
-            Instruction::Nip => (&['A', 'B'], &[G(0), G(1)], &[G(1)]),
+            Instruction::Over => {
+                (&[any('A'), any('B')], &[G(0), G(1)], &[G(0), G(1), G(0)])
+            }
+            Instruction::Nip => (&[any('A'), any('B')], &[G(0), G(1)], &[G(1)]),
             Instruction::Tuck => {
-                (&['A', 'B'], &[G(0), G(1)], &[G(1), G(0), G(1)])
+                (&[any('A'), any('B')], &[G(0), G(1)], &[G(1), G(0), G(1)])
             }
         };
         self.transform(g, i, o, instruction.span)?;
@@ -401,7 +399,7 @@ enum Pattern {
 }
 
 impl Pattern {
-    const fn display(self, generics: &[char]) -> DisplayPattern {
+    const fn display(self, generics: &[Generic]) -> DisplayPattern {
         DisplayPattern {
             pattern: self,
             generics,
@@ -411,16 +409,14 @@ impl Pattern {
 
 struct DisplayPattern<'a> {
     pattern: Pattern,
-    generics: &'a [char],
+    generics: &'a [Generic],
 }
 
 impl fmt::Display for DisplayPattern<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.pattern {
             Pattern::Concrete(typ) => typ.fmt(f),
-            Pattern::Generic(i) => {
-                Generic(self.generics[usize::from(i)]).fmt(f)
-            }
+            Pattern::Generic(i) => self.generics[usize::from(i)].fmt(f),
         }
     }
 }
