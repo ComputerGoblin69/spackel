@@ -349,7 +349,9 @@ impl TryFrom<Token<'_>> for Instruction {
             "over" => Self::Over,
             "nip" => Self::Nip,
             "tuck" => Self::Tuck,
-            _ => {
+            _ =>
+            {
+                #[allow(clippy::option_if_let_else)]
                 if let Ok(number) = token.parse::<i32>() {
                     Self::PushI32(number)
                 } else if let Ok(number) = token.parse::<f32>() {
