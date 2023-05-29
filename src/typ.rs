@@ -20,12 +20,19 @@ pub enum Type {
 
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if f.alternate() {
+            f.write_char('`')?;
+        }
         f.write_str(match self {
             Self::Bool => "bool",
             Self::I32 => "i32",
             Self::F32 => "f32",
             Self::Type => "type",
-        })
+        })?;
+        if f.alternate() {
+            f.write_char('`')?;
+        }
+        Ok(())
     }
 }
 
@@ -180,6 +187,7 @@ impl Checker {
         span: Span,
     ) -> Result<()> {
         Signature {
+            generics,
             parameters,
             returns,
         }
@@ -211,6 +219,7 @@ impl Checker {
         &mut self,
         instruction: &Spanned<Instruction>,
     ) -> Result<()> {
+        use Constraint::Any;
         use Generic as any;
         use Pattern::{Concrete as C, Generic as G};
         use Type::{Bool, F32, I32};
@@ -256,7 +265,9 @@ impl Checker {
             Instruction::PushF32(_) => (&[], &[], &[C(F32)]),
             Instruction::PushBool(_) => (&[], &[], &[C(Bool)]),
             Instruction::PushType(_) => (&[], &[], &[C(Type::Type)]),
-            Instruction::TypeOf => (&[any('T')], &[G(0)], &[C(Type::Type)]),
+            Instruction::TypeOf => {
+                (&[any('T', Any)], &[G(0)], &[C(Type::Type)])
+            }
             Instruction::BinMathOp(_) => (&[], &[C(I32); 2], &[C(I32)]),
             Instruction::F32BinMathOp(_) => (&[], &[C(F32); 2], &[C(F32)]),
             Instruction::Sqrt => (&[], &[C(F32)], &[C(F32)]),
@@ -266,18 +277,26 @@ impl Checker {
             | Instruction::PrintChar => (&[], &[C(I32)], &[]),
             Instruction::Not => (&[], &[C(Bool)], &[C(Bool)]),
             Instruction::BinLogicOp(_) => (&[], &[C(Bool); 2], &[C(Bool)]),
-            Instruction::Drop => (&[any('T')], &[G(0)], &[]),
-            Instruction::Dup => (&[any('T')], &[G(0)], &[G(0); 2]),
-            Instruction::Swap => {
-                (&[any('A'), any('B')], &[G(0), G(1)], &[G(1), G(0)])
+            Instruction::Drop => (&[any('T', Any)], &[G(0)], &[]),
+            Instruction::Dup => (&[any('T', Any)], &[G(0)], &[G(0); 2]),
+            Instruction::Swap => (
+                &[any('A', Any), any('B', Any)],
+                &[G(0), G(1)],
+                &[G(1), G(0)],
+            ),
+            Instruction::Over => (
+                &[any('A', Any), any('B', Any)],
+                &[G(0), G(1)],
+                &[G(0), G(1), G(0)],
+            ),
+            Instruction::Nip => {
+                (&[any('A', Any), any('B', Any)], &[G(0), G(1)], &[G(1)])
             }
-            Instruction::Over => {
-                (&[any('A'), any('B')], &[G(0), G(1)], &[G(0), G(1), G(0)])
-            }
-            Instruction::Nip => (&[any('A'), any('B')], &[G(0), G(1)], &[G(1)]),
-            Instruction::Tuck => {
-                (&[any('A'), any('B')], &[G(0), G(1)], &[G(1), G(0), G(1)])
-            }
+            Instruction::Tuck => (
+                &[any('A', Any), any('B', Any)],
+                &[G(0), G(1)],
+                &[G(1), G(0), G(1)],
+            ),
         };
         self.transform(g, i, o, instruction.span)?;
 
@@ -346,6 +365,7 @@ impl Checker {
 }
 
 struct Signature<'a> {
+    generics: &'a [Generic],
     parameters: &'a [Pattern],
     returns: &'a [Pattern],
 }
@@ -369,6 +389,13 @@ impl Signature<'_> {
                     }
                 }
                 Pattern::Generic(i) => {
+                    if let Constraint::OneOf(possibilities) =
+                        self.generics[usize::from(*i)].1
+                    {
+                        if !possibilities.contains(&argument) {
+                            return Err(());
+                        }
+                    }
                     if let Some(generic) = generics.get(usize::from(*i)) {
                         if argument != *generic {
                             return Err(());
@@ -421,7 +448,7 @@ impl fmt::Display for DisplayPattern<'_> {
     }
 }
 
-struct Generic(char);
+struct Generic(char, Constraint);
 
 impl fmt::Display for Generic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -431,7 +458,15 @@ impl fmt::Display for Generic {
         write!(f, "<{}>", self.0)?;
         if f.alternate() {
             f.write_char('`')?;
+            if let Constraint::OneOf(possibilities) = self.1 {
+                write!(f, " in {{{:#}}}", possibilities.iter().format(", "))?;
+            }
         }
         Ok(())
     }
+}
+
+enum Constraint {
+    Any,
+    OneOf(&'static [Type]),
 }
