@@ -15,7 +15,7 @@ use cranelift::prelude::{
     AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext,
     InstBuilder, IntCC, Signature, Value,
 };
-use cranelift_module::{DataContext, DataId, FuncId, Linkage, Module};
+use cranelift_module::{FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
 use std::{collections::HashMap, fs::File, io::Write, path::Path};
 
@@ -111,18 +111,8 @@ pub fn compile(
         object_module,
         extern_functions: HashMap::new(),
         extern_function_signatures,
-        strings: HashMap::new(),
     };
     compiler.compile()?;
-
-    let mut data_ctx = DataContext::new();
-    for (s, data_id) in &compiler.strings {
-        data_ctx.define(s.as_bytes().into());
-        compiler
-            .object_module
-            .define_data(*data_id, &data_ctx)
-            .unwrap();
-    }
 
     let object_bytes = compiler.object_module.finish().emit()?;
     let mut object_file = File::create(options.out_path)?;
@@ -139,7 +129,6 @@ struct Compiler<'a> {
     object_module: ObjectModule,
     extern_functions: HashMap<&'static str, FuncId>,
     extern_function_signatures: HashMap<&'static str, Signature>,
-    strings: HashMap<&'static str, DataId>,
 }
 
 impl Stack for Compiler<'_> {
