@@ -1,6 +1,6 @@
 use crate::{
     diagnostics::{self, primary_label},
-    ir::{Function, Instruction, Program},
+    ir::{BinMathOp, Function, Instruction, Program},
 };
 use anyhow::{ensure, Context, Result};
 use codemap::Span;
@@ -273,8 +273,17 @@ impl Checker {
             Instruction::TypeOf => {
                 (&[any('T', Any)], &[G(0)], &[C(Type::Type)])
             }
+            Instruction::BinMathOp(
+                BinMathOp::Add
+                | BinMathOp::Sub
+                | BinMathOp::Mul
+                | BinMathOp::Div,
+            ) => (
+                &[Generic('N', Constraint::OneOf(&[I32, F32]))],
+                &[G(0); 2],
+                &[G(0)],
+            ),
             Instruction::BinMathOp(_) => (&[], &[C(I32); 2], &[C(I32)]),
-            Instruction::F32BinMathOp(_) => (&[], &[C(F32); 2], &[C(F32)]),
             Instruction::Sqrt => (&[], &[C(F32)], &[C(F32)]),
             Instruction::Comparison(_) => (&[], &[C(I32); 2], &[C(Bool)]),
             Instruction::Print
@@ -383,7 +392,6 @@ impl Checker {
             Instruction::Println => Instruction::Println,
             Instruction::PrintChar => Instruction::PrintChar,
             Instruction::BinMathOp(op) => Instruction::BinMathOp(op),
-            Instruction::F32BinMathOp(op) => Instruction::F32BinMathOp(op),
             Instruction::Sqrt => Instruction::Sqrt,
             Instruction::Comparison(comparison) => {
                 Instruction::Comparison(comparison)

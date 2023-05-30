@@ -78,7 +78,7 @@ impl Interpreter<'_> {
 
     fn interpret_instruction(
         &mut self,
-        (instruction, _): &(Instruction<Generics>, Generics),
+        (instruction, generics): &(Instruction<Generics>, Generics),
     ) {
         match instruction {
             Instruction::Call(name) => {
@@ -125,6 +125,17 @@ impl Interpreter<'_> {
                     .try_into()
                     .unwrap_or(char::REPLACEMENT_CHARACTER)
             ),
+            Instruction::BinMathOp(op) if generics[0] == Type::F32 => {
+                let b = self.pop_f32();
+                let a = self.pop_f32();
+                self.push(Value::F32(match op {
+                    BinMathOp::Add => a + b,
+                    BinMathOp::Sub => a - b,
+                    BinMathOp::Mul => a * b,
+                    BinMathOp::Div => a / b,
+                    BinMathOp::Rem | BinMathOp::SillyAdd => unreachable!(),
+                }));
+            }
             Instruction::BinMathOp(op) => {
                 let b = self.pop_i32();
                 let a = self.pop_i32();
@@ -139,17 +150,6 @@ impl Interpreter<'_> {
                         (1, 1) => 1,
                         _ => a + b,
                     },
-                }));
-            }
-            Instruction::F32BinMathOp(op) => {
-                let b = self.pop_f32();
-                let a = self.pop_f32();
-                self.push(Value::F32(match op {
-                    BinMathOp::Add => a + b,
-                    BinMathOp::Sub => a - b,
-                    BinMathOp::Mul => a * b,
-                    BinMathOp::Div => a / b,
-                    BinMathOp::Rem | BinMathOp::SillyAdd => unreachable!(),
                 }));
             }
             Instruction::Sqrt => {

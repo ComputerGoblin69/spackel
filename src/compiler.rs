@@ -241,7 +241,7 @@ impl Compiler<'_> {
 
     fn compile_instruction(
         &mut self,
-        (instruction, _): &(Instruction<Generics>, Generics),
+        (instruction, generics): &(Instruction<Generics>, Generics),
         fb: &mut FunctionBuilder,
     ) {
         match instruction {
@@ -290,24 +290,17 @@ impl Compiler<'_> {
             Instruction::BinMathOp(op) => {
                 let b = self.pop();
                 let a = self.pop();
-                self.push(match op {
-                    BinMathOp::Add => fb.ins().iadd(a, b),
-                    BinMathOp::Sub => fb.ins().isub(a, b),
-                    BinMathOp::Mul => fb.ins().imul(a, b),
-                    BinMathOp::Div => fb.ins().sdiv(a, b),
-                    BinMathOp::Rem => fb.ins().srem(a, b),
-                    BinMathOp::SillyAdd => todo!(),
-                });
-            }
-            Instruction::F32BinMathOp(op) => {
-                let b = self.pop();
-                let a = self.pop();
-                self.push(match op {
-                    BinMathOp::Add => fb.ins().fadd(a, b),
-                    BinMathOp::Sub => fb.ins().fsub(a, b),
-                    BinMathOp::Mul => fb.ins().fmul(a, b),
-                    BinMathOp::Div => fb.ins().fdiv(a, b),
-                    BinMathOp::Rem | BinMathOp::SillyAdd => unreachable!(),
+                self.push(match (generics[0], op) {
+                    (Type::F32, BinMathOp::Add) => fb.ins().fadd(a, b),
+                    (Type::F32, BinMathOp::Sub) => fb.ins().fsub(a, b),
+                    (Type::F32, BinMathOp::Mul) => fb.ins().fmul(a, b),
+                    (Type::F32, BinMathOp::Div) => fb.ins().fdiv(a, b),
+                    (_, BinMathOp::Add) => fb.ins().iadd(a, b),
+                    (_, BinMathOp::Sub) => fb.ins().isub(a, b),
+                    (_, BinMathOp::Mul) => fb.ins().imul(a, b),
+                    (_, BinMathOp::Div) => fb.ins().sdiv(a, b),
+                    (_, BinMathOp::Rem) => fb.ins().srem(a, b),
+                    (_, BinMathOp::SillyAdd) => todo!(),
                 });
             }
             Instruction::Sqrt => {

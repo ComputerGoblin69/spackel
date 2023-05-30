@@ -103,10 +103,6 @@ now.
 
 ### Math
 
-Due to limitations in Spackel's type system, math operations that make sense
-for both integers and floats default to `i32`. To handle `f32` instead, use the
-`f32.` prefix, e.g. `f32.+` to add floats.
-
 - Binary operators (these take two numbers as arguments and produce one number):
   - `+`: addition.
   - `-`: subtraction.
