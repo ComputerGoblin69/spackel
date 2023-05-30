@@ -25,3 +25,13 @@ pub unsafe extern "C" fn spkl_print_i32(n: i32) {
 pub unsafe extern "C" fn spkl_println_i32(n: i32) {
     printf(b"%d\n".as_ptr().cast(), n);
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn spkl_print_f32(n: f32) {
+    printf(b"%g".as_ptr().cast(), n as f64);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn spkl_println_f32(n: f32) {
+    printf(b"%g\n".as_ptr().cast(), n as f64);
+}

@@ -286,9 +286,12 @@ impl Checker {
             Instruction::BinMathOp(_) => (&[], &[C(I32); 2], &[C(I32)]),
             Instruction::Sqrt => (&[], &[C(F32)], &[C(F32)]),
             Instruction::Comparison(_) => (&[], &[C(I32); 2], &[C(Bool)]),
-            Instruction::Print
-            | Instruction::Println
-            | Instruction::PrintChar => (&[], &[C(I32)], &[]),
+            Instruction::Print | Instruction::Println => (
+                &[Generic('T', Constraint::OneOf(&[I32, F32]))],
+                &[G(0)],
+                &[],
+            ),
+            Instruction::PrintChar => (&[], &[C(I32)], &[]),
             Instruction::Not => (&[], &[C(Bool)], &[C(Bool)]),
             Instruction::BinLogicOp(_) => (&[], &[C(Bool); 2], &[C(Bool)]),
             Instruction::Drop => (&[any('T', Any)], &[G(0)], &[]),

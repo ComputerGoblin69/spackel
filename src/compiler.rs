@@ -247,11 +247,27 @@ impl Compiler<'_> {
             Instruction::PushType(_) | Instruction::TypeOf => todo!(),
             Instruction::Print => {
                 let n = self.pop();
-                self.call_extern("spkl_print_i32", &[n], fb);
+                self.call_extern(
+                    if generics[0] == Type::F32 {
+                        "spkl_print_f32"
+                    } else {
+                        "spkl_print_i32"
+                    },
+                    &[n],
+                    fb,
+                );
             }
             Instruction::Println => {
                 let n = self.pop();
-                self.call_extern("spkl_println_i32", &[n], fb);
+                self.call_extern(
+                    if generics[0] == Type::F32 {
+                        "spkl_println_f32"
+                    } else {
+                        "spkl_println_i32"
+                    },
+                    &[n],
+                    fb,
+                );
             }
             Instruction::PrintChar => {
                 let n = self.pop();
@@ -461,6 +477,22 @@ fn extern_function_signatures(
             "spkl_println_i32",
             Signature {
                 params: vec![AbiParam::new(I32)],
+                returns: Vec::new(),
+                call_conv,
+            },
+        ),
+        (
+            "spkl_print_f32",
+            Signature {
+                params: vec![AbiParam::new(F32)],
+                returns: Vec::new(),
+                call_conv,
+            },
+        ),
+        (
+            "spkl_println_f32",
+            Signature {
+                params: vec![AbiParam::new(F32)],
                 returns: Vec::new(),
                 call_conv,
             },

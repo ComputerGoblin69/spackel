@@ -116,6 +116,12 @@ impl Interpreter<'_> {
                 let a = self.pop();
                 self.push(Value::Type(a.typ()));
             }
+            Instruction::Print if generics[0] == Type::F32 => {
+                print!("{}", self.pop_f32());
+            }
+            Instruction::Println if generics[0] == Type::F32 => {
+                println!("{}", self.pop_f32());
+            }
             Instruction::Print => print!("{}", self.pop_i32()),
             Instruction::Println => println!("{}", self.pop_i32()),
             #[allow(clippy::cast_sign_loss)]
