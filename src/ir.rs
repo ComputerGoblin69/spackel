@@ -4,7 +4,7 @@ use crate::{
     typ::Type,
 };
 use anyhow::{bail, ensure, Result};
-use codemap::{Span, Spanned};
+use codemap::Span;
 use itertools::{process_results, Itertools};
 use std::collections::HashMap;
 
@@ -146,10 +146,10 @@ fn instructions_until_terminator<'a>(
                 let terminator = terminator
                     .ok_or_else(|| unterminated("`then` statement", token))?;
                 match &*terminator {
-                    "end" => Spanned {
-                        span: token.span.merge(terminator.span),
-                        node: Instruction::Then(body),
-                    },
+                    "end" => (
+                        Instruction::Then(body),
+                        token.span.merge(terminator.span),
+                    ),
                     "else" => {
                         let (else_, terminator) =
                             instructions_until_terminator(tokens)?;
@@ -157,10 +157,10 @@ fn instructions_until_terminator<'a>(
                             unterminated("`then else` statement", token)
                         })?;
                         match &*terminator {
-                            "end" => Spanned {
-                                span: token.span.merge(terminator.span),
-                                node: Instruction::ThenElse(body, else_),
-                            },
+                            "end" => (
+                                Instruction::ThenElse(body, else_),
+                                token.span.merge(terminator.span),
+                            ),
                             _ => bail!(unexpected_token(
                                 terminator,
                                 "expected `end`",
@@ -178,20 +178,17 @@ fn instructions_until_terminator<'a>(
                 let terminator = terminator
                     .ok_or_else(|| unterminated("`repeat` loop", token))?;
                 match &*terminator {
-                    "end" => Spanned {
-                        span: token.span.merge(terminator.span),
-                        node: Instruction::Repeat {
+                    "end" => (
+                        Instruction::Repeat {
                             body,
                             end_span: terminator.span,
                         },
-                    },
+                        token.span.merge(terminator.span),
+                    ),
                     _ => bail!(unexpected_token(terminator, "expected `end`",)),
                 }
             }
-            _ => Spanned {
-                span: token.span,
-                node: token.try_into()?,
-            },
+            _ => (token.try_into()?, token.span),
         }))
     })
     .collect::<Result<_>>()?;
@@ -276,13 +273,13 @@ fn is_keyword(token: &str) -> bool {
     )
 }
 
-type Block = Box<[Spanned<Instruction>]>;
+type Block<T = Span> = Box<[(Instruction<T>, T)]>;
 
-pub enum Instruction {
+pub enum Instruction<T = Span> {
     Call(Box<str>),
-    Then(Block),
-    ThenElse(Block, Block),
-    Repeat { body: Block, end_span: Span },
+    Then(Block<T>),
+    ThenElse(Block<T>, Block<T>),
+    Repeat { body: Block<T>, end_span: Span },
     PushI32(i32),
     PushF32(f32),
     PushBool(bool),

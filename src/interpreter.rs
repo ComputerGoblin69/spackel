@@ -1,7 +1,7 @@
 use crate::{
     ir::{BinLogicOp, BinMathOp, Comparison, Instruction},
     stack::Stack,
-    typ::Type,
+    typ::{Generics, Type},
 };
 
 pub fn interpret(program: &crate::typ::CheckedProgram) {
@@ -76,7 +76,10 @@ impl Interpreter<'_> {
         }
     }
 
-    fn interpret_instruction(&mut self, instruction: &Instruction) {
+    fn interpret_instruction(
+        &mut self,
+        (instruction, _): &(Instruction<Generics>, Generics),
+    ) {
         match instruction {
             Instruction::Call(name) => {
                 let function = &self.program.functions()[&**name];

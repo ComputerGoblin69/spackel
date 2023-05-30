@@ -1,10 +1,9 @@
 use crate::{
     ir::{BinLogicOp, BinMathOp, Comparison, Instruction},
     stack::Stack,
-    typ::Type,
+    typ::{Generics, Type},
 };
 use anyhow::Result;
-use codemap::Spanned;
 use cranelift::prelude::{
     codegen::{
         ir::{Function, Inst, UserFuncName},
@@ -242,7 +241,7 @@ impl Compiler<'_> {
 
     fn compile_instruction(
         &mut self,
-        instruction: &Instruction,
+        (instruction, _): &(Instruction<Generics>, Generics),
         fb: &mut FunctionBuilder,
     ) {
         match instruction {
@@ -368,7 +367,7 @@ impl Compiler<'_> {
 
     fn compile_then(
         &mut self,
-        body: &[Spanned<Instruction>],
+        body: &[(Instruction<Generics>, Generics)],
         fb: &mut FunctionBuilder,
     ) {
         let then = fb.create_block();
@@ -399,8 +398,8 @@ impl Compiler<'_> {
 
     fn compile_then_else(
         &mut self,
-        then: &[Spanned<Instruction>],
-        else_: &[Spanned<Instruction>],
+        then: &[(Instruction<Generics>, Generics)],
+        else_: &[(Instruction<Generics>, Generics)],
         fb: &mut FunctionBuilder,
     ) {
         let then_block = fb.create_block();
@@ -443,7 +442,7 @@ impl Compiler<'_> {
 
     fn compile_repeat(
         &mut self,
-        body: &[Spanned<Instruction>],
+        body: &[(Instruction<Generics>, Generics)],
         fb: &mut FunctionBuilder,
     ) {
         let loop_block = fb.create_block();

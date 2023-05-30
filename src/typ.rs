@@ -3,7 +3,7 @@ use crate::{
     ir::{Function, Instruction, Program},
 };
 use anyhow::{ensure, Context, Result};
-use codemap::{Span, Spanned};
+use codemap::Span;
 use itertools::Itertools;
 use std::{
     collections::HashMap,
@@ -36,6 +36,8 @@ impl fmt::Display for Type {
     }
 }
 
+pub type Generics = Box<[Type]>;
+
 pub struct CheckedProgram {
     functions: HashMap<String, CheckedFunction>,
 }
@@ -49,7 +51,7 @@ impl CheckedProgram {
 pub struct CheckedFunction {
     declaration_span: Span,
     pub signature: FunctionSignature,
-    pub body: Box<[Spanned<Instruction>]>,
+    pub body: Box<[(Instruction<Generics>, Generics)]>,
 }
 
 #[derive(Clone)]
@@ -66,24 +68,24 @@ pub fn check(program: Program) -> Result<CheckedProgram> {
             let parameters = function
                 .parameters
                 .iter()
-                .map(|param| match &**param {
+                .map(|(param, span)| match param {
                     Instruction::PushType(typ) => Ok(*typ),
                     _ => Err(diagnostics::error(
                         "unsupported instruction in function signature"
                             .to_owned(),
-                        vec![primary_label(param.span, "")],
+                        vec![primary_label(*span, "")],
                     )),
                 })
                 .collect::<Result<Box<_>, _>>()?;
             let returns = function
                 .returns
                 .iter()
-                .map(|param| match &**param {
+                .map(|(param, span)| match param {
                     Instruction::PushType(typ) => Ok(*typ),
                     _ => Err(diagnostics::error(
                         "unsupported instruction in function signature"
                             .to_owned(),
-                        vec![primary_label(param.span, "")],
+                        vec![primary_label(*span, "")],
                     )),
                 })
                 .collect::<Result<Box<_>, _>>()?;
@@ -146,9 +148,12 @@ impl Checker {
         function: Function,
     ) -> Result<CheckedFunction> {
         self.stack = self.function_signatures[name].parameters.to_vec();
-        for instruction in &*function.body {
-            self.check_instruction(instruction)?;
-        }
+        let body = function
+            .body
+            .into_vec()
+            .into_iter()
+            .map(|instruction| self.check_instruction(instruction))
+            .collect::<Result<_>>()?;
 
         self.transform(
             &[],
@@ -175,7 +180,7 @@ impl Checker {
         Ok(CheckedFunction {
             declaration_span: function.declaration_span,
             signature: self.function_signatures[name].clone(),
-            body: function.body,
+            body,
         })
     }
 
@@ -185,7 +190,7 @@ impl Checker {
         parameters: &[Pattern],
         returns: &[Pattern],
         span: Span,
-    ) -> Result<()> {
+    ) -> Result<Generics> {
         Signature {
             generics,
             parameters,
@@ -217,8 +222,8 @@ impl Checker {
 
     fn check_instruction(
         &mut self,
-        instruction: &Spanned<Instruction>,
-    ) -> Result<()> {
+        (instruction, span): (Instruction, Span),
+    ) -> Result<(Instruction<Generics>, Generics)> {
         use Constraint::Any;
         use Generic as any;
         use Pattern::{Concrete as C, Generic as G};
@@ -226,13 +231,13 @@ impl Checker {
 
         let parameters;
         let returns;
-        let (g, i, o): (&[_], &[Pattern], &[Pattern]) = match &**instruction {
+        let (g, i, o): (&[_], &[Pattern], &[Pattern]) = match &instruction {
             Instruction::Call(name) => {
                 ensure!(
                     **name != *"main",
                     diagnostics::error(
                         "`main` cannot be called".to_owned(),
-                        vec![primary_label(instruction.span, "")]
+                        vec![primary_label(span, "")]
                     ).note("`main` implicitly returns the program exit code, making its signature not match up with what the source code indicates")
                 );
 
@@ -240,7 +245,7 @@ impl Checker {
                     self.function_signatures.get(&**name).ok_or_else(|| {
                         diagnostics::error(
                             format!("unknown instruction: `{name}`"),
-                            vec![primary_label(instruction.span, "")],
+                            vec![primary_label(span, "")],
                         )
                     })?;
                 parameters = signature
@@ -298,14 +303,16 @@ impl Checker {
                 &[G(1), G(0), G(1)],
             ),
         };
-        self.transform(g, i, o, instruction.span)?;
+        let generics = self.transform(g, i, o, span)?;
 
-        match &**instruction {
+        let instruction = match instruction {
             Instruction::Then(body) => {
                 let before = self.stack.clone();
-                for instruction in &**body {
-                    self.check_instruction(instruction)?;
-                }
+                let body = body
+                    .into_vec()
+                    .into_iter()
+                    .map(|instruction| self.check_instruction(instruction))
+                    .collect::<Result<_>>()?;
                 ensure!(
                     before == self.stack,
                     diagnostics::error(
@@ -314,19 +321,24 @@ impl Checker {
                             before.iter().format(" "),
                             self.stack.iter().format(" "),
                         ),
-                        vec![primary_label(instruction.span, "")],
+                        vec![primary_label(span, "")],
                     ),
                 );
+                Instruction::Then(body)
             }
             Instruction::ThenElse(then, else_) => {
                 let before = self.stack.clone();
-                for instruction in &**then {
-                    self.check_instruction(instruction)?;
-                }
+                let then = then
+                    .into_vec()
+                    .into_iter()
+                    .map(|instruction| self.check_instruction(instruction))
+                    .collect::<Result<_>>()?;
                 let then_types = std::mem::replace(&mut self.stack, before);
-                for instruction in &**else_ {
-                    self.check_instruction(instruction)?;
-                }
+                let else_ = else_
+                    .into_vec()
+                    .into_iter()
+                    .map(|instruction| self.check_instruction(instruction))
+                    .collect::<Result<_>>()?;
                 ensure!(
                     then_types == self.stack,
                     diagnostics::error(
@@ -335,16 +347,19 @@ impl Checker {
                             then_types.iter().format(" "),
                             self.stack.iter().format(" "),
                         ),
-                        vec![primary_label(instruction.span, "")],
+                        vec![primary_label(span, "")],
                     ),
                 );
+                Instruction::ThenElse(then, else_)
             }
             Instruction::Repeat { body, end_span } => {
                 let before = self.stack.clone();
-                for instruction in &**body {
-                    self.check_instruction(instruction)?;
-                }
-                self.transform(&[], &[C(Bool)], &[], *end_span)?;
+                let body = body
+                    .into_vec()
+                    .into_iter()
+                    .map(|instruction| self.check_instruction(instruction))
+                    .collect::<Result<_>>()?;
+                self.transform(&[], &[C(Bool)], &[], end_span)?;
                 ensure!(
                     before == self.stack,
                     diagnostics::error(
@@ -353,14 +368,36 @@ impl Checker {
                             before.iter().format(" "),
                             self.stack.iter().format(" "),
                         ),
-                        vec![primary_label(instruction.span, "")],
+                        vec![primary_label(span, "")],
                     ),
                 );
+                Instruction::Repeat { body, end_span }
             }
-            _ => {}
-        }
-
-        Ok(())
+            Instruction::Call(name) => Instruction::Call(name),
+            Instruction::PushI32(n) => Instruction::PushI32(n),
+            Instruction::PushF32(n) => Instruction::PushF32(n),
+            Instruction::PushBool(b) => Instruction::PushBool(b),
+            Instruction::PushType(typ) => Instruction::PushType(typ),
+            Instruction::TypeOf => Instruction::TypeOf,
+            Instruction::Print => Instruction::Print,
+            Instruction::Println => Instruction::Println,
+            Instruction::PrintChar => Instruction::PrintChar,
+            Instruction::BinMathOp(op) => Instruction::BinMathOp(op),
+            Instruction::F32BinMathOp(op) => Instruction::F32BinMathOp(op),
+            Instruction::Sqrt => Instruction::Sqrt,
+            Instruction::Comparison(comparison) => {
+                Instruction::Comparison(comparison)
+            }
+            Instruction::Not => Instruction::Not,
+            Instruction::BinLogicOp(op) => Instruction::BinLogicOp(op),
+            Instruction::Drop => Instruction::Drop,
+            Instruction::Dup => Instruction::Dup,
+            Instruction::Swap => Instruction::Swap,
+            Instruction::Over => Instruction::Over,
+            Instruction::Nip => Instruction::Nip,
+            Instruction::Tuck => Instruction::Tuck,
+        };
+        Ok((instruction, generics))
     }
 }
 
@@ -371,7 +408,7 @@ struct Signature<'a> {
 }
 
 impl Signature<'_> {
-    fn apply(&self, checker: &mut Checker) -> Result<(), ()> {
+    fn apply(&self, checker: &mut Checker) -> Result<Generics, ()> {
         if checker.stack.len() < self.parameters.len() {
             return Err(());
         }
@@ -415,7 +452,7 @@ impl Signature<'_> {
                 Pattern::Generic(i) => consumed[usize::from(*i)],
             }));
 
-        Ok(())
+        Ok(generics.into())
     }
 }
 
