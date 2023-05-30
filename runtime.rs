@@ -2,6 +2,7 @@
 
 extern "C" {
     fn write(fd: i32, buf: *const core::ffi::c_void, len: usize) -> i32;
+    fn printf(fmt: *const core::ffi::c_char, ...) -> i32;
 }
 
 #[no_mangle]
@@ -13,4 +14,14 @@ pub unsafe extern "C" fn spkl_print_char(n: u32) {
     unsafe {
         write(1, s.as_ptr().cast(), s.len());
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn spkl_print_i32(n: i32) {
+    printf(b"%d".as_ptr().cast(), n);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn spkl_println_i32(n: i32) {
+    printf(b"%d\n".as_ptr().cast(), n);
 }

@@ -17,7 +17,7 @@ use cranelift::prelude::{
 };
 use cranelift_module::{DataContext, DataId, FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
-use std::{collections::HashMap, fs::File, io::Write, path::Path, sync::Arc};
+use std::{collections::HashMap, fs::File, io::Write, path::Path};
 
 pub struct Options<'a> {
     pub target_triple: &'a str,
@@ -108,7 +108,6 @@ pub fn compile(
         function_ids,
         function_signatures,
         stack: Vec::new(),
-        isa,
         object_module,
         extern_functions: HashMap::new(),
         extern_function_signatures,
@@ -137,7 +136,6 @@ struct Compiler<'a> {
     function_signatures: HashMap<&'a str, Signature>,
     function_ids: HashMap<&'a str, FuncId>,
     stack: Vec<Value>,
-    isa: Arc<dyn TargetIsa>,
     object_module: ObjectModule,
     extern_functions: HashMap<&'static str, FuncId>,
     extern_function_signatures: HashMap<&'static str, Signature>,
@@ -175,21 +173,6 @@ impl Compiler<'_> {
         let func_ref =
             self.object_module.declare_func_in_func(func_id, fb.func);
         fb.ins().call(func_ref, args)
-    }
-
-    fn allocate_str(
-        &mut self,
-        s: &'static str,
-        fb: &mut FunctionBuilder,
-    ) -> Value {
-        let data_id = *self.strings.entry(s).or_insert_with(|| {
-            self.object_module
-                .declare_anonymous_data(false, false)
-                .unwrap()
-        });
-        let global_value =
-            self.object_module.declare_data_in_func(data_id, fb.func);
-        fb.ins().global_value(self.isa.pointer_type(), global_value)
     }
 
     fn compile(&mut self) -> Result<()> {
@@ -275,13 +258,11 @@ impl Compiler<'_> {
             Instruction::PushType(_) | Instruction::TypeOf => todo!(),
             Instruction::Print => {
                 let n = self.pop();
-                let fmt = self.allocate_str("%d\0", fb);
-                self.call_extern("printf", &[fmt, n], fb);
+                self.call_extern("spkl_print_i32", &[n], fb);
             }
             Instruction::Println => {
                 let n = self.pop();
-                let fmt = self.allocate_str("%d\n\0", fb);
-                self.call_extern("printf", &[fmt, n], fb);
+                self.call_extern("spkl_println_i32", &[n], fb);
             }
             Instruction::PrintChar => {
                 let n = self.pop();
@@ -469,7 +450,6 @@ fn extern_function_signatures(
     isa: &dyn TargetIsa,
 ) -> HashMap<&'static str, Signature> {
     let call_conv = isa.default_call_conv();
-    let pointer = isa.pointer_type();
 
     HashMap::from([
         (
@@ -481,10 +461,18 @@ fn extern_function_signatures(
             },
         ),
         (
-            "printf",
+            "spkl_print_i32",
             Signature {
-                params: vec![AbiParam::new(pointer), AbiParam::new(I32)],
-                returns: vec![AbiParam::new(I32)],
+                params: vec![AbiParam::new(I32)],
+                returns: Vec::new(),
+                call_conv,
+            },
+        ),
+        (
+            "spkl_println_i32",
+            Signature {
+                params: vec![AbiParam::new(I32)],
+                returns: Vec::new(),
                 call_conv,
             },
         ),
