@@ -130,7 +130,7 @@ impl<'a> Macro<'a> {
 
 fn instructions_until_terminator<'a>(
     tokens: &mut impl Iterator<Item = Token<'a>>,
-) -> Result<(Block, Option<Token<'a>>)> {
+) -> Result<(Box<Block>, Option<Token<'a>>)> {
     let mut terminator = None;
     let instructions = extra_iterators::try_from_fn(|| {
         let Some(token) = tokens.next() else {
@@ -198,9 +198,9 @@ fn instructions_until_terminator<'a>(
 
 pub struct Function {
     pub declaration_span: Span,
-    pub parameters: Block,
-    pub returns: Block,
-    pub body: Block,
+    pub parameters: Box<Block>,
+    pub returns: Box<Block>,
+    pub body: Box<Block>,
     pub end_span: Span,
 }
 
@@ -273,13 +273,13 @@ fn is_keyword(token: &str) -> bool {
     )
 }
 
-type Block<T = Span> = Box<[(Instruction<T>, T)]>;
+pub type Block<T = Span> = [(Instruction<T>, T)];
 
 pub enum Instruction<T = Span> {
     Call(Box<str>),
-    Then(Block<T>),
-    ThenElse(Block<T>, Block<T>),
-    Repeat { body: Block<T>, end_span: Span },
+    Then(Box<Block<T>>),
+    ThenElse(Box<Block<T>>, Box<Block<T>>),
+    Repeat { body: Box<Block<T>>, end_span: Span },
     PushI32(i32),
     PushF32(f32),
     PushBool(bool),

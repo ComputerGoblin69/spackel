@@ -45,7 +45,7 @@ pub fn compile(
     let mut object_module = ObjectModule::new(object_builder);
 
     let function_signatures = program
-        .functions()
+        .functions
         .iter()
         .map(|(name, function)| {
             let params = function
@@ -168,7 +168,7 @@ impl Compiler<'_> {
         let mut ctx = Context::new();
         let mut func_ctx = FunctionBuilderContext::new();
 
-        for (name, function) in self.program.functions() {
+        for (name, function) in &self.program.functions {
             self.compile_function(name, function, &mut ctx, &mut func_ctx)?;
         }
 
@@ -218,7 +218,7 @@ impl Compiler<'_> {
     ) {
         match instruction {
             Instruction::Call(name) => {
-                let function = &self.program.functions()[&**name];
+                let function = &self.program.functions[&**name];
                 let param_count = function.signature.parameters.len();
                 let func_id = self.function_ids[&**name];
                 let func_ref =

@@ -6,6 +6,7 @@ mod diagnostics;
 mod interpreter;
 mod ir;
 mod lexer;
+mod peephole;
 mod stack;
 mod typ;
 
@@ -50,7 +51,8 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
     let file = code_map.add_file(source_path, source_code);
 
     let program = ir::Program::parse(&file)?;
-    let program = typ::check(program)?;
+    let mut program = typ::check(program)?;
+    peephole::optimize(&mut program);
 
     match command {
         Command::Run => {

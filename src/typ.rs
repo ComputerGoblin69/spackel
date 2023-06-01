@@ -39,13 +39,7 @@ impl fmt::Display for Type {
 pub type Generics = Box<[Type]>;
 
 pub struct CheckedProgram {
-    functions: HashMap<String, CheckedFunction>,
-}
-
-impl CheckedProgram {
-    pub const fn functions(&self) -> &HashMap<String, CheckedFunction> {
-        &self.functions
-    }
+    pub functions: HashMap<String, CheckedFunction>,
 }
 
 pub struct CheckedFunction {
