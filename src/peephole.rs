@@ -10,7 +10,7 @@ pub fn optimize(program: &mut CheckedProgram) {
 }
 
 fn optimize_block(body: &mut Box<Block<Generics>>) {
-    let mut out = Vec::<(_, _)>::new();
+    let mut out = Vec::<(_, _)>::with_capacity(body.len());
 
     for (instruction, generics) in std::mem::take(body).into_vec() {
         match instruction {
