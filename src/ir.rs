@@ -356,6 +356,7 @@ impl TryFrom<Token<'_>> for Instruction {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum BinMathOp {
     Add,
     Sub,

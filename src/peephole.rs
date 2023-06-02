@@ -1,5 +1,5 @@
 use crate::{
-    ir::{Block, Instruction},
+    ir::{BinMathOp, Block, Instruction},
     typ::{CheckedProgram, Generics},
 };
 
@@ -14,6 +14,21 @@ fn optimize_block(body: &mut Box<Block<Generics>>) {
 
     for (instruction, generics) in std::mem::take(body).into_vec() {
         match instruction {
+            Instruction::BinMathOp(op) => {
+                if let [.., (Instruction::PushF32(a), _), (Instruction::PushF32(b), _)] =
+                    &mut *out
+                {
+                    match op {
+                        BinMathOp::Add => *a += *b,
+                        BinMathOp::Sub => *a -= *b,
+                        BinMathOp::Mul => *a *= *b,
+                        BinMathOp::Div => *a /= *b,
+                        BinMathOp::Rem | BinMathOp::SillyAdd => unreachable!(),
+                    }
+                    out.pop();
+                    continue;
+                }
+            }
             Instruction::Sqrt => {
                 if let Some((Instruction::PushF32(n), ..)) = out.last_mut() {
                     *n = n.sqrt();
