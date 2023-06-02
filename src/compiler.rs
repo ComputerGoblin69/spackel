@@ -276,11 +276,11 @@ impl Compiler<'_> {
             Instruction::BinMathOp(op) => {
                 let b = self.pop();
                 let a = self.pop();
-                self.push(match (generics[0], op) {
-                    (Type::F32, BinMathOp::Add) => fb.ins().fadd(a, b),
-                    (Type::F32, BinMathOp::Sub) => fb.ins().fsub(a, b),
-                    (Type::F32, BinMathOp::Mul) => fb.ins().fmul(a, b),
-                    (Type::F32, BinMathOp::Div) => fb.ins().fdiv(a, b),
+                self.push(match (generics.first(), op) {
+                    (Some(Type::F32), BinMathOp::Add) => fb.ins().fadd(a, b),
+                    (Some(Type::F32), BinMathOp::Sub) => fb.ins().fsub(a, b),
+                    (Some(Type::F32), BinMathOp::Mul) => fb.ins().fmul(a, b),
+                    (Some(Type::F32), BinMathOp::Div) => fb.ins().fdiv(a, b),
                     (_, BinMathOp::Add) => fb.ins().iadd(a, b),
                     (_, BinMathOp::Sub) => fb.ins().isub(a, b),
                     (_, BinMathOp::Mul) => fb.ins().imul(a, b),

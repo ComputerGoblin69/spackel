@@ -131,7 +131,9 @@ impl Interpreter<'_> {
                     .try_into()
                     .unwrap_or(char::REPLACEMENT_CHARACTER)
             ),
-            Instruction::BinMathOp(op) if generics[0] == Type::F32 => {
+            Instruction::BinMathOp(op)
+                if generics.first() == Some(&Type::F32) =>
+            {
                 let b = self.pop_f32();
                 let a = self.pop_f32();
                 self.push(Value::F32(match op {
