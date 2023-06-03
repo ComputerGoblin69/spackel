@@ -98,6 +98,7 @@ pub fn check(program: Program) -> Result<CheckedProgram> {
     Checker {
         stack: Vec::new(),
         function_signatures,
+        unsafe_layers: 0,
     }
     .check(program)
 }
@@ -105,6 +106,7 @@ pub fn check(program: Program) -> Result<CheckedProgram> {
 struct Checker {
     stack: Vec<Type>,
     function_signatures: HashMap<String, FunctionSignature>,
+    unsafe_layers: usize,
 }
 
 impl Checker {
@@ -386,11 +388,13 @@ impl Checker {
                 Instruction::Repeat { body, end_span }
             }
             Instruction::Unsafe(body) => {
+                self.unsafe_layers += 1;
                 let body = body
                     .into_vec()
                     .into_iter()
                     .map(|instruction| self.check_instruction(instruction))
                     .collect::<Result<_>>()?;
+                self.unsafe_layers -= 1;
                 Instruction::Unsafe(body)
             }
             Instruction::Call(name) => Instruction::Call(name),
