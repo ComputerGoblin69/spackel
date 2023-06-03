@@ -188,6 +188,18 @@ fn instructions_until_terminator<'a>(
                     _ => bail!(unexpected_token(terminator, "expected `end`",)),
                 }
             }
+            "unsafe" => {
+                let (body, terminator) = instructions_until_terminator(tokens)?;
+                let terminator = terminator
+                    .ok_or_else(|| unterminated("`unsafe` block", token))?;
+                match &*terminator {
+                    "end" => (
+                        Instruction::Unsafe(body),
+                        token.span.merge(terminator.span),
+                    ),
+                    _ => bail!(unexpected_token(terminator, "expected `end`",)),
+                }
+            }
             _ => (token.try_into()?, token.span),
         }))
     })
