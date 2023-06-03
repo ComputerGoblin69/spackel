@@ -1,5 +1,5 @@
 pub trait Stack {
-    type Item: Copy;
+    type Item: Clone;
 
     fn push(&mut self, element: Self::Item);
 
@@ -7,7 +7,7 @@ pub trait Stack {
 
     fn dup(&mut self) {
         let v = self.pop();
-        self.push(v);
+        self.push(v.clone());
         self.push(v);
     }
 
@@ -21,7 +21,7 @@ pub trait Stack {
     fn over(&mut self) {
         let b = self.pop();
         let a = self.pop();
-        self.push(a);
+        self.push(a.clone());
         self.push(b);
         self.push(a);
     }
@@ -35,7 +35,7 @@ pub trait Stack {
     fn tuck(&mut self) {
         let b = self.pop();
         let a = self.pop();
-        self.push(b);
+        self.push(b.clone());
         self.push(a);
         self.push(b);
     }

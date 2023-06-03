@@ -57,6 +57,7 @@ pub fn compile(
                     Type::I32 => I32,
                     Type::F32 => F32,
                     Type::Type => todo!(),
+                    Type::Ptr(_) => isa.pointer_type(),
                 })
                 .map(AbiParam::new)
                 .collect();
@@ -69,6 +70,7 @@ pub fn compile(
                     Type::I32 => I32,
                     Type::F32 => F32,
                     Type::Type => todo!(),
+                    Type::Ptr(_) => isa.pointer_type(),
                 })
                 .map(AbiParam::new)
                 .collect::<Vec<_>>();

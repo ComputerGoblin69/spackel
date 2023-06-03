@@ -10,12 +10,13 @@ use std::{
     fmt::{self, Write as _},
 };
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Type {
     Bool,
     I32,
     F32,
     Type,
+    Ptr(Box<Self>),
 }
 
 impl fmt::Display for Type {
@@ -23,12 +24,13 @@ impl fmt::Display for Type {
         if f.alternate() {
             f.write_char('`')?;
         }
-        f.write_str(match self {
-            Self::Bool => "bool",
-            Self::I32 => "i32",
-            Self::F32 => "f32",
-            Self::Type => "type",
-        })?;
+        match self {
+            Self::Bool => f.write_str("bool"),
+            Self::I32 => f.write_str("i32"),
+            Self::F32 => f.write_str("f32"),
+            Self::Type => f.write_str("type"),
+            Self::Ptr(inner) => write!(f, "{inner} ptr"),
+        }?;
         if f.alternate() {
             f.write_char('`')?;
         }
@@ -63,7 +65,7 @@ pub fn check(program: Program) -> Result<CheckedProgram> {
                 .parameters
                 .iter()
                 .map(|(param, span)| match param {
-                    Instruction::PushType(typ) => Ok(*typ),
+                    Instruction::PushType(typ) => Ok(typ.clone()),
                     _ => Err(diagnostics::error(
                         "unsupported instruction in function signature"
                             .to_owned(),
@@ -75,7 +77,7 @@ pub fn check(program: Program) -> Result<CheckedProgram> {
                 .returns
                 .iter()
                 .map(|(param, span)| match param {
-                    Instruction::PushType(typ) => Ok(*typ),
+                    Instruction::PushType(typ) => Ok(typ.clone()),
                     _ => Err(diagnostics::error(
                         "unsupported instruction in function signature"
                             .to_owned(),
@@ -154,7 +156,7 @@ impl Checker {
             &self.function_signatures[name]
                 .returns
                 .iter()
-                .copied()
+                .cloned()
                 .map(Pattern::Concrete)
                 .collect::<Box<_>>(),
             &[],
@@ -245,13 +247,13 @@ impl Checker {
                 parameters = signature
                     .parameters
                     .iter()
-                    .copied()
+                    .cloned()
                     .map(C)
                     .collect::<Box<_>>();
                 returns = signature
                     .returns
                     .iter()
-                    .copied()
+                    .cloned()
                     .map(C)
                     .collect::<Box<_>>();
                 (&[], &*parameters, &*returns)
@@ -274,12 +276,12 @@ impl Checker {
                 | BinMathOp::Div,
             ) => (
                 &[Generic('N', Constraint::OneOf(&[I32, F32]))],
-                &[G(0); 2],
+                &[G(0), G(0)],
                 &[G(0)],
             ),
-            Instruction::BinMathOp(_) => (&[], &[C(I32); 2], &[C(I32)]),
+            Instruction::BinMathOp(_) => (&[], &[C(I32), C(I32)], &[C(I32)]),
             Instruction::Sqrt => (&[], &[C(F32)], &[C(F32)]),
-            Instruction::Comparison(_) => (&[], &[C(I32); 2], &[C(Bool)]),
+            Instruction::Comparison(_) => (&[], &[C(I32), C(I32)], &[C(Bool)]),
             Instruction::Print | Instruction::Println => (
                 &[Generic('T', Constraint::OneOf(&[I32, F32]))],
                 &[G(0)],
@@ -287,9 +289,11 @@ impl Checker {
             ),
             Instruction::PrintChar => (&[], &[C(I32)], &[]),
             Instruction::Not => (&[], &[C(Bool)], &[C(Bool)]),
-            Instruction::BinLogicOp(_) => (&[], &[C(Bool); 2], &[C(Bool)]),
+            Instruction::BinLogicOp(_) => {
+                (&[], &[C(Bool), C(Bool)], &[C(Bool)])
+            }
             Instruction::Drop => (&[any('T', Any)], &[G(0)], &[]),
-            Instruction::Dup => (&[any('T', Any)], &[G(0)], &[G(0); 2]),
+            Instruction::Dup => (&[any('T', Any)], &[G(0)], &[G(0), G(0)]),
             Instruction::Swap => (
                 &[any('A', Any), any('B', Any)],
                 &[G(0), G(1)],
@@ -422,11 +426,10 @@ impl Signature<'_> {
 
         let mut generics = Vec::new();
 
-        for (parameter, &argument) in std::iter::zip(self.parameters, consumed)
-        {
+        for (parameter, argument) in std::iter::zip(self.parameters, consumed) {
             match parameter {
                 Pattern::Concrete(typ) => {
-                    if argument != *typ {
+                    if *argument != *typ {
                         return Err(());
                     }
                 }
@@ -434,16 +437,16 @@ impl Signature<'_> {
                     if let Constraint::OneOf(possibilities) =
                         self.generics[usize::from(*i)].1
                     {
-                        if !possibilities.contains(&argument) {
+                        if !possibilities.contains(argument) {
                             return Err(());
                         }
                     }
                     if let Some(generic) = generics.get(usize::from(*i)) {
-                        if argument != *generic {
+                        if *argument != *generic {
                             return Err(());
                         }
                     } else {
-                        generics.push(argument);
+                        generics.push(argument.clone());
                     }
                 }
             }
@@ -453,22 +456,22 @@ impl Signature<'_> {
         checker
             .stack
             .extend(self.returns.iter().map(|out| match out {
-                Pattern::Concrete(typ) => *typ,
-                Pattern::Generic(i) => consumed[usize::from(*i)],
+                Pattern::Concrete(typ) => typ.clone(),
+                Pattern::Generic(i) => consumed[usize::from(*i)].clone(),
             }));
 
         Ok(generics.into())
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum Pattern {
     Concrete(Type),
     Generic(u8),
 }
 
 impl Pattern {
-    const fn display(self, generics: &[Generic]) -> DisplayPattern {
+    const fn display<'a>(&'a self, generics: &'a [Generic]) -> DisplayPattern {
         DisplayPattern {
             pattern: self,
             generics,
@@ -477,7 +480,7 @@ impl Pattern {
 }
 
 struct DisplayPattern<'a> {
-    pattern: Pattern,
+    pattern: &'a Pattern,
     generics: &'a [Generic],
 }
 
@@ -485,7 +488,7 @@ impl fmt::Display for DisplayPattern<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.pattern {
             Pattern::Concrete(typ) => typ.fmt(f),
-            Pattern::Generic(i) => self.generics[usize::from(i)].fmt(f),
+            Pattern::Generic(i) => self.generics[usize::from(*i)].fmt(f),
         }
     }
 }

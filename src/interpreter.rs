@@ -12,7 +12,7 @@ pub fn interpret(program: &crate::typ::CheckedProgram) {
     .interpret();
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum Value {
     Bool(bool),
     I32(i32),
@@ -21,7 +21,7 @@ enum Value {
 }
 
 impl Value {
-    const fn typ(self) -> Type {
+    const fn typ(&self) -> Type {
         match self {
             Self::Bool(_) => Type::Bool,
             Self::I32(_) => Type::I32,
@@ -111,7 +111,7 @@ impl Interpreter<'_> {
             Instruction::PushI32(number) => self.push(Value::I32(*number)),
             Instruction::PushF32(number) => self.push(Value::F32(*number)),
             Instruction::PushBool(b) => self.push(Value::Bool(*b)),
-            Instruction::PushType(typ) => self.push(Value::Type(*typ)),
+            Instruction::PushType(typ) => self.push(Value::Type(typ.clone())),
             Instruction::TypeOf => {
                 let a = self.pop();
                 self.push(Value::Type(a.typ()));
