@@ -261,7 +261,9 @@ impl Checker {
             Instruction::Then(_) | Instruction::ThenElse(..) => {
                 (&[], &[C(Bool)], &[])
             }
-            Instruction::Repeat { .. } => (&[], &[], &[]),
+            Instruction::Repeat { .. } | Instruction::Unsafe(_) => {
+                (&[], &[], &[])
+            }
             Instruction::PushI32(_) => (&[], &[], &[C(I32)]),
             Instruction::PushF32(_) => (&[], &[], &[C(F32)]),
             Instruction::PushBool(_) => (&[], &[], &[C(Bool)]),
@@ -382,6 +384,14 @@ impl Checker {
                     ),
                 );
                 Instruction::Repeat { body, end_span }
+            }
+            Instruction::Unsafe(body) => {
+                let body = body
+                    .into_vec()
+                    .into_iter()
+                    .map(|instruction| self.check_instruction(instruction))
+                    .collect::<Result<_>>()?;
+                Instruction::Unsafe(body)
             }
             Instruction::Call(name) => Instruction::Call(name),
             Instruction::PushI32(n) => Instruction::PushI32(n),

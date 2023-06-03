@@ -237,6 +237,11 @@ impl Compiler<'_> {
                 self.compile_then_else(then, else_, fb);
             }
             Instruction::Repeat { body, .. } => self.compile_repeat(body, fb),
+            Instruction::Unsafe(body) => {
+                for instruction in &**body {
+                    self.compile_instruction(instruction, fb);
+                }
+            }
             Instruction::PushI32(number) => {
                 self.stack.push(fb.ins().iconst(I32, i64::from(*number)));
             }

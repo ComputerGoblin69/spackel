@@ -290,6 +290,7 @@ pub enum Instruction<T = Span> {
     Then(Box<Block<T>>),
     ThenElse(Box<Block<T>>, Box<Block<T>>),
     Repeat { body: Box<Block<T>>, end_span: Span },
+    Unsafe(Box<Block<T>>),
     PushI32(i32),
     PushF32(f32),
     PushBool(bool),

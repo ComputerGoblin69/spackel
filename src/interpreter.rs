@@ -108,6 +108,11 @@ impl Interpreter<'_> {
                     self.pop_bool()
                 } {}
             }
+            Instruction::Unsafe(body) => {
+                for instruction in &**body {
+                    self.interpret_instruction(instruction);
+                }
+            }
             Instruction::PushI32(number) => self.push(Value::I32(*number)),
             Instruction::PushF32(number) => self.push(Value::F32(*number)),
             Instruction::PushBool(b) => self.push(Value::Bool(*b)),
