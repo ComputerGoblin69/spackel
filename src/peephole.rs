@@ -72,15 +72,11 @@ fn optimize_block(body: &mut Box<Block<Generics>>) {
                 }
             }
             Instruction::Dup => {
-                if let Some(
-                    value @ (
-                        Instruction::PushI32(_) | Instruction::PushF32(_),
-                        ..,
-                    ),
-                ) = out.last()
-                {
-                    out.push(value.clone());
-                    continue;
+                if let Some(value) = out.last() {
+                    if trivially_dupable(value) {
+                        out.push(value.clone());
+                        continue;
+                    }
                 }
             }
             _ => {}
@@ -89,4 +85,13 @@ fn optimize_block(body: &mut Box<Block<Generics>>) {
     }
 
     *body = out.into_boxed_slice();
+}
+
+const fn trivially_dupable(value: &(Instruction<Generics>, Generics)) -> bool {
+    matches!(
+        value.0,
+        Instruction::PushI32(_)
+            | Instruction::PushF32(_)
+            | Instruction::PushBool(_)
+    )
 }
