@@ -275,6 +275,7 @@ fn is_keyword(token: &str) -> bool {
 
 pub type Block<T = Span> = [(Instruction<T>, T)];
 
+#[derive(Clone)]
 pub enum Instruction<T = Span> {
     Call(Box<str>),
     Then(Box<Block<T>>),
@@ -366,6 +367,7 @@ pub enum BinMathOp {
     SillyAdd,
 }
 
+#[derive(Clone, Copy)]
 pub enum Comparison {
     Lt,
     Le,
@@ -374,6 +376,7 @@ pub enum Comparison {
     Gt,
 }
 
+#[derive(Clone, Copy)]
 pub enum BinLogicOp {
     And,
     Or,

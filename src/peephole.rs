@@ -54,6 +54,18 @@ fn optimize_block(body: &mut Box<Block<Generics>>) {
                     continue;
                 }
             }
+            Instruction::Dup => {
+                if let Some(
+                    value @ (
+                        Instruction::PushI32(_) | Instruction::PushF32(_),
+                        ..,
+                    ),
+                ) = out.last()
+                {
+                    out.push(value.clone());
+                    continue;
+                }
+            }
             _ => {}
         }
         out.push((instruction, generics));
