@@ -15,7 +15,26 @@ fn optimize_block(body: &mut Box<Block<Generics>>) {
     for (instruction, generics) in std::mem::take(body).into_vec() {
         match instruction {
             Instruction::BinMathOp(op) => {
-                if let [.., (Instruction::PushF32(a), _), (Instruction::PushF32(b), _)] =
+                if let [.., (Instruction::PushI32(a), _), (Instruction::PushI32(b), _)] =
+                    &mut *out
+                {
+                    if let Some(res) = match op {
+                        BinMathOp::Add => a.checked_add(*b),
+                        BinMathOp::Sub => a.checked_sub(*b),
+                        BinMathOp::Mul => a.checked_mul(*b),
+                        BinMathOp::Div => a.checked_div(*b),
+                        BinMathOp::Rem => a.checked_rem(*b),
+                        BinMathOp::SillyAdd => match (*a, *b) {
+                            (9, 10) | (10, 9) => Some(21),
+                            (1, 1) => Some(1),
+                            _ => a.checked_add(*b),
+                        },
+                    } {
+                        *a = res;
+                        out.pop();
+                        continue;
+                    }
+                } else if let [.., (Instruction::PushF32(a), _), (Instruction::PushF32(b), _)] =
                     &mut *out
                 {
                     match op {
