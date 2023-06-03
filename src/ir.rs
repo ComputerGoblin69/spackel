@@ -269,7 +269,16 @@ impl Function {
 fn is_keyword(token: &str) -> bool {
     matches!(
         token,
-        "macro" | "then" | "else" | "repeat" | "end" | "do" | "fn" | ":" | "->"
+        "macro"
+            | "then"
+            | "else"
+            | "repeat"
+            | "end"
+            | "do"
+            | "fn"
+            | ":"
+            | "->"
+            | "unsafe"
     )
 }
 
