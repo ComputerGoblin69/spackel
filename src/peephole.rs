@@ -12,8 +12,16 @@ pub fn optimize(program: &mut CheckedProgram) {
 fn optimize_block(body: &mut Box<Block<Generics>>) {
     let mut out = Vec::<(_, _)>::with_capacity(body.len());
 
-    for (instruction, generics) in std::mem::take(body).into_vec() {
+    for (mut instruction, generics) in std::mem::take(body).into_vec() {
         match instruction {
+            Instruction::Then(ref mut body)
+            | Instruction::Repeat { ref mut body, .. } => {
+                optimize_block(body);
+            }
+            Instruction::ThenElse(ref mut then, ref mut else_) => {
+                optimize_block(then);
+                optimize_block(else_);
+            }
             Instruction::BinMathOp(op) => {
                 if let [.., (Instruction::PushI32(a), _), (Instruction::PushI32(b), _)] =
                     &mut *out
