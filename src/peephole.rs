@@ -1,5 +1,5 @@
 use crate::{
-    ir::{BinMathOp, Block, Instruction},
+    ir::{BinMathOp, Block, Comparison, Instruction},
     typ::{CheckedProgram, Generics},
 };
 
@@ -51,6 +51,23 @@ fn optimize_block(body: &mut Box<Block<Generics>>) {
             Instruction::Sqrt => {
                 if let Some((Instruction::PushF32(n), ..)) = out.last_mut() {
                     *n = n.sqrt();
+                    continue;
+                }
+            }
+            Instruction::Comparison(op) => {
+                if let [.., (Instruction::PushI32(a), _), (Instruction::PushI32(b), _)] =
+                    &*out
+                {
+                    let res = match op {
+                        Comparison::Lt => *a < *b,
+                        Comparison::Le => *a <= *b,
+                        Comparison::Eq => *a == *b,
+                        Comparison::Ge => *a >= *b,
+                        Comparison::Gt => *a > *b,
+                    };
+                    out.pop();
+                    out.pop();
+                    out.push((Instruction::PushBool(res), [].into()));
                     continue;
                 }
             }
