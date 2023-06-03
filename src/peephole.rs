@@ -32,6 +32,16 @@ fn optimize_block(body: &mut Box<Block<Generics>>) {
             Instruction::ThenElse(ref mut then, ref mut else_) => {
                 optimize_block(then);
                 optimize_block(else_);
+                if let Some((Instruction::PushBool(condition), ..)) = out.last()
+                {
+                    let condition = *condition;
+                    out.pop();
+                    out.extend(
+                        std::mem::take(if condition { then } else { else_ })
+                            .into_vec(),
+                    );
+                    continue;
+                }
             }
             Instruction::BinMathOp(op) => {
                 if let [.., (Instruction::PushI32(a), _), (Instruction::PushI32(b), _)] =
