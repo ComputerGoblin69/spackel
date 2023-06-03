@@ -14,8 +14,19 @@ fn optimize_block(body: &mut Box<Block<Generics>>) {
 
     for (mut instruction, generics) in std::mem::take(body).into_vec() {
         match instruction {
-            Instruction::Then(ref mut body)
-            | Instruction::Repeat { ref mut body, .. } => {
+            Instruction::Then(ref mut body) => {
+                optimize_block(body);
+                if let Some((Instruction::PushBool(condition), ..)) = out.last()
+                {
+                    let condition = *condition;
+                    out.pop();
+                    if condition {
+                        out.extend(std::mem::take(body).into_vec());
+                    }
+                    continue;
+                }
+            }
+            Instruction::Repeat { ref mut body, .. } => {
                 optimize_block(body);
             }
             Instruction::ThenElse(ref mut then, ref mut else_) => {
