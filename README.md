@@ -92,6 +92,22 @@ that's really *the instruction that pushes the type `i32` onto the stack*. The
 set of instructions that can be used in signatures is however very limited for
 now.
 
+## Unsafe code
+
+While Spackel is memory safe by default, you may sometimes need to do unsafe
+things, like messing around with raw pointers. To make it clear what can cause
+memory unsafety, certain instructions are marked as `unsafe` and can only be
+used inside of `unsafe` blocks:
+
+```spackel
+fn main : -> do
+  unsafe
+    # Doing some horribly unsafe things.
+    # Compiler, I promise that I know what I'm doing.
+  end
+end
+```
+
 ## Instructions
 
 ### Constants
