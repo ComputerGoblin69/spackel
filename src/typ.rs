@@ -227,6 +227,14 @@ impl Checker {
         use Pattern::{Concrete as C, Generic as G};
         use Type::{Bool, F32, I32};
 
+        ensure!(
+            !(instruction.is_unsafe() && self.unsafe_layers == 0),
+            diagnostics::error(
+                "unsafe instruction used in safe context".to_owned(),
+                vec![primary_label(span, "")]
+            )
+        );
+
         let parameters;
         let returns;
         let (g, i, o): (&[_], &[Pattern], &[Pattern]) = match &instruction {
@@ -296,6 +304,7 @@ impl Checker {
             Instruction::BinLogicOp(_) => {
                 (&[], &[C(Bool), C(Bool)], &[C(Bool)])
             }
+            Instruction::ReadPtr => todo!(),
             Instruction::Drop => (&[any('T', Any)], &[G(0)], &[]),
             Instruction::Dup => (&[any('T', Any)], &[G(0)], &[G(0), G(0)]),
             Instruction::Swap => (
@@ -413,6 +422,7 @@ impl Checker {
             }
             Instruction::Not => Instruction::Not,
             Instruction::BinLogicOp(op) => Instruction::BinLogicOp(op),
+            Instruction::ReadPtr => Instruction::ReadPtr,
             Instruction::Drop => Instruction::Drop,
             Instruction::Dup => Instruction::Dup,
             Instruction::Swap => Instruction::Swap,

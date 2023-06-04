@@ -196,6 +196,7 @@ impl Interpreter<'_> {
                     BinLogicOp::Xnor => !(a ^ b),
                 }));
             }
+            Instruction::ReadPtr => todo!(),
             Instruction::Drop => {
                 self.pop();
             }

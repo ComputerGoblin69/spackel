@@ -340,6 +340,7 @@ impl Compiler<'_> {
                     }
                 });
             }
+            Instruction::ReadPtr => todo!(),
             Instruction::Drop => {
                 self.pop();
             }

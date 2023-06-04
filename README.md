@@ -173,3 +173,8 @@ end
 ### Type shenanigans
 
 - `type-of`: replaces the top element with its type.
+
+### Raw pointers
+
+- `read-ptr`: reads the value that a pointer points to. This is unsafe since the
+  pointer could point anywhere.

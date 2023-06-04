@@ -316,6 +316,7 @@ pub enum Instruction<T = Span> {
     Comparison(Comparison),
     Not,
     BinLogicOp(BinLogicOp),
+    ReadPtr,
     Drop,
     Dup,
     Swap,
@@ -357,6 +358,7 @@ impl TryFrom<Token<'_>> for Instruction {
             "nand" => Self::BinLogicOp(BinLogicOp::Nand),
             "nor" => Self::BinLogicOp(BinLogicOp::Nor),
             "xnor" => Self::BinLogicOp(BinLogicOp::Xnor),
+            "read-ptr" => Self::ReadPtr,
             "ß" => Self::PushI32(1945),
             "drop" => Self::Drop,
             "dup" => Self::Dup,
@@ -376,6 +378,12 @@ impl TryFrom<Token<'_>> for Instruction {
                 }
             }
         })
+    }
+}
+
+impl<T> Instruction<T> {
+    pub const fn is_unsafe(&self) -> bool {
+        matches!(self, Self::ReadPtr)
     }
 }
 
