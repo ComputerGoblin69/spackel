@@ -52,26 +52,14 @@ pub fn compile(
                 .signature
                 .parameters
                 .iter()
-                .map(|typ| match typ {
-                    Type::Bool => I8,
-                    Type::I32 => I32,
-                    Type::F32 => F32,
-                    Type::Type => todo!(),
-                    Type::Ptr(_) => isa.pointer_type(),
-                })
+                .map(|typ| typ.to_clif(&*isa).unwrap())
                 .map(AbiParam::new)
                 .collect();
             let mut returns = function
                 .signature
                 .returns
                 .iter()
-                .map(|typ| match typ {
-                    Type::Bool => I8,
-                    Type::I32 => I32,
-                    Type::F32 => F32,
-                    Type::Type => todo!(),
-                    Type::Ptr(_) => isa.pointer_type(),
-                })
+                .map(|typ| typ.to_clif(&*isa).unwrap())
                 .map(AbiParam::new)
                 .collect::<Vec<_>>();
             if *name == "main" {
@@ -110,6 +98,7 @@ pub fn compile(
         function_ids,
         function_signatures,
         stack: Vec::new(),
+        isa: &*isa,
         object_module,
         extern_functions: HashMap::new(),
         extern_function_signatures,
@@ -128,6 +117,7 @@ struct Compiler<'a> {
     function_signatures: HashMap<&'a str, Signature>,
     function_ids: HashMap<&'a str, FuncId>,
     stack: Vec<Value>,
+    isa: &'a dyn TargetIsa,
     object_module: ObjectModule,
     extern_functions: HashMap<&'static str, FuncId>,
     extern_function_signatures: HashMap<&'static str, Signature>,
@@ -342,12 +332,7 @@ impl Compiler<'_> {
             }
             Instruction::ReadPtr => {
                 let ptr = self.pop();
-                let typ = match generics[0] {
-                    Type::Bool => I8,
-                    Type::I32 => I32,
-                    Type::F32 => F32,
-                    _ => unreachable!(),
-                };
+                let typ = generics[0].to_clif(self.isa).unwrap();
                 self.push(fb.ins().load(typ, MemFlags::trusted(), ptr, 0));
             }
             Instruction::Drop => {
@@ -515,4 +500,16 @@ fn extern_function_signatures(
             },
         ),
     ])
+}
+
+impl Type {
+    fn to_clif(&self, isa: &dyn TargetIsa) -> Option<cranelift::prelude::Type> {
+        Some(match self {
+            Self::Bool => I8,
+            Self::I32 => I32,
+            Self::F32 => F32,
+            Self::Type => return None,
+            Self::Ptr(_) => isa.pointer_type(),
+        })
+    }
 }
