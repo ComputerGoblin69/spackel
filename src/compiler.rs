@@ -13,7 +13,7 @@ use cranelift::prelude::{
     settings,
     types::{F32, I32, I8},
     AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext,
-    InstBuilder, IntCC, Signature, Value,
+    InstBuilder, IntCC, MemFlags, Signature, Value,
 };
 use cranelift_module::{FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
@@ -340,7 +340,16 @@ impl Compiler<'_> {
                     }
                 });
             }
-            Instruction::ReadPtr => todo!(),
+            Instruction::ReadPtr => {
+                let ptr = self.pop();
+                let typ = match generics[0] {
+                    Type::Bool => I8,
+                    Type::I32 => I32,
+                    Type::F32 => F32,
+                    _ => unreachable!(),
+                };
+                self.push(fb.ins().load(typ, MemFlags::trusted(), ptr, 0));
+            }
             Instruction::Drop => {
                 self.pop();
             }
