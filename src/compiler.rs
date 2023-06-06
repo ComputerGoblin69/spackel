@@ -13,7 +13,8 @@ use cranelift::prelude::{
     settings,
     types::{F32, I32, I8},
     AbiParam, Configurable, FunctionBuilder, FunctionBuilderContext,
-    InstBuilder, IntCC, MemFlags, Signature, Value,
+    InstBuilder, IntCC, MemFlags, Signature, StackSlotData, StackSlotKind,
+    Value,
 };
 use cranelift_module::{FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
@@ -330,7 +331,21 @@ impl Compiler<'_> {
                     }
                 });
             }
-            Instruction::AddrOf => todo!(),
+            Instruction::AddrOf => {
+                let typ = generics[0].to_clif(self.isa).unwrap();
+                let stack_slot = fb.create_sized_stack_slot(StackSlotData {
+                    kind: StackSlotKind::ExplicitSlot,
+                    size: typ.bytes(),
+                });
+                self.dup();
+                let v = self.pop();
+                fb.ins().stack_store(v, stack_slot, 0);
+                self.push(fb.ins().stack_addr(
+                    self.isa.pointer_type(),
+                    stack_slot,
+                    0,
+                ));
+            }
             Instruction::ReadPtr => {
                 let ptr = self.pop();
                 let typ = generics[0].to_clif(self.isa).unwrap();
