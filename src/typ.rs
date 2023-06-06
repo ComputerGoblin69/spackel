@@ -307,7 +307,7 @@ impl Checker {
             Instruction::AddrOf => {
                 (&[any('T', Any)], &[G(0)], &[G(0), Ptr(&G(0))])
             }
-            Instruction::ReadPtr => todo!(),
+            Instruction::ReadPtr => (&[any('T', Any)], &[Ptr(&G(0))], &[G(0)]),
             Instruction::Drop => (&[any('T', Any)], &[G(0)], &[]),
             Instruction::Dup => (&[any('T', Any)], &[G(0)], &[G(0), G(0)]),
             Instruction::Swap => (
