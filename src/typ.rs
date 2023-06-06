@@ -304,7 +304,7 @@ impl Checker {
             Instruction::BinLogicOp(_) => {
                 (&[], &[C(Bool), C(Bool)], &[C(Bool)])
             }
-            Instruction::ReadPtr => todo!(),
+            Instruction::AddrOf | Instruction::ReadPtr => todo!(),
             Instruction::Drop => (&[any('T', Any)], &[G(0)], &[]),
             Instruction::Dup => (&[any('T', Any)], &[G(0)], &[G(0), G(0)]),
             Instruction::Swap => (
@@ -422,6 +422,7 @@ impl Checker {
             }
             Instruction::Not => Instruction::Not,
             Instruction::BinLogicOp(op) => Instruction::BinLogicOp(op),
+            Instruction::AddrOf => Instruction::AddrOf,
             Instruction::ReadPtr => Instruction::ReadPtr,
             Instruction::Drop => Instruction::Drop,
             Instruction::Dup => Instruction::Dup,

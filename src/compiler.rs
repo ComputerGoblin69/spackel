@@ -330,6 +330,7 @@ impl Compiler<'_> {
                     }
                 });
             }
+            Instruction::AddrOf => todo!(),
             Instruction::ReadPtr => {
                 let ptr = self.pop();
                 let typ = generics[0].to_clif(self.isa).unwrap();

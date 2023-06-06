@@ -176,5 +176,6 @@ end
 
 ### Raw pointers
 
+- `addr-of`: creates a pointer to its argument.
 - `read-ptr`: reads the value that a pointer points to. This is unsafe since the
   pointer could point anywhere.
