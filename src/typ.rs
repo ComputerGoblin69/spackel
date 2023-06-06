@@ -224,7 +224,7 @@ impl Checker {
     ) -> Result<(Instruction<Generics>, Generics)> {
         use Constraint::Any;
         use Generic as any;
-        use Pattern::{Concrete as C, Generic as G};
+        use Pattern::{Concrete as C, Generic as G, Ptr};
         use Type::{Bool, F32, I32};
 
         ensure!(
@@ -304,7 +304,10 @@ impl Checker {
             Instruction::BinLogicOp(_) => {
                 (&[], &[C(Bool), C(Bool)], &[C(Bool)])
             }
-            Instruction::AddrOf | Instruction::ReadPtr => todo!(),
+            Instruction::AddrOf => {
+                (&[any('T', Any)], &[G(0)], &[G(0), Ptr(&G(0))])
+            }
+            Instruction::ReadPtr => todo!(),
             Instruction::Drop => (&[any('T', Any)], &[G(0)], &[]),
             Instruction::Dup => (&[any('T', Any)], &[G(0)], &[G(0), G(0)]),
             Instruction::Swap => (
@@ -451,7 +454,17 @@ impl Signature<'_> {
 
         let mut generics = Vec::new();
 
-        for (parameter, argument) in std::iter::zip(self.parameters, consumed) {
+        for (mut parameter, mut argument) in
+            std::iter::zip(self.parameters, consumed)
+        {
+            while let Pattern::Ptr(inner) = parameter {
+                let Type::Ptr(argument_pointee) = argument else {
+                    return Err(());
+                };
+                argument = argument_pointee;
+                parameter = inner;
+            }
+
             match parameter {
                 Pattern::Concrete(typ) => {
                     if *argument != *typ {
@@ -474,16 +487,14 @@ impl Signature<'_> {
                         generics.push(argument.clone());
                     }
                 }
+                Pattern::Ptr(_) => unreachable!(),
             }
         }
 
-        let consumed = checker.stack.split_off(new_len);
-        checker
-            .stack
-            .extend(self.returns.iter().map(|out| match out {
-                Pattern::Concrete(typ) => typ.clone(),
-                Pattern::Generic(i) => consumed[usize::from(*i)].clone(),
-            }));
+        checker.stack.truncate(new_len);
+        checker.stack.extend(
+            self.returns.iter().map(|pattern| pattern.reify(&generics)),
+        );
 
         Ok(generics.into())
     }
@@ -493,6 +504,7 @@ impl Signature<'_> {
 enum Pattern {
     Concrete(Type),
     Generic(u8),
+    Ptr(&'static Self),
 }
 
 impl Pattern {
@@ -500,6 +512,16 @@ impl Pattern {
         DisplayPattern {
             pattern: self,
             generics,
+        }
+    }
+
+    fn reify(&self, resolved_generics: &[Type]) -> Type {
+        match self {
+            Self::Concrete(typ) => typ.clone(),
+            Self::Generic(i) => resolved_generics[usize::from(*i)].clone(),
+            Self::Ptr(inner) => {
+                Type::Ptr(Box::new(inner.reify(resolved_generics)))
+            }
         }
     }
 }
@@ -514,6 +536,9 @@ impl fmt::Display for DisplayPattern<'_> {
         match self.pattern {
             Pattern::Concrete(typ) => typ.fmt(f),
             Pattern::Generic(i) => self.generics[usize::from(*i)].fmt(f),
+            Pattern::Ptr(inner) => {
+                write!(f, "{} ptr", inner.display(self.generics))
+            }
         }
     }
 }
