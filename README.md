@@ -42,6 +42,7 @@ you, including ensuring that the runtime and the compiler itself are up to date:
 - `i32`: the signed 32-bit integer type.
 - `f32`: single precision floating point numbers.
 - `bool`: boolean `true` or `false`.
+- `<T> ptr`: raw pointers to some type `<T>`.
 - `type`: the type of types. If you run into Girard's paradox because of this,
   please file an issue.
 
