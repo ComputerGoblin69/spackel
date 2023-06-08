@@ -2,6 +2,7 @@ use crate::{
     ir::{BinMathOp, Block, Comparison, Instruction},
     typ::{CheckedProgram, Generics},
 };
+use std::ops::{Deref, DerefMut};
 
 pub fn optimize(program: &mut CheckedProgram) {
     for function in program.functions.values_mut() {
@@ -10,20 +11,50 @@ pub fn optimize(program: &mut CheckedProgram) {
 }
 
 fn optimize_block(body: &mut Box<Block<Generics>>) {
-    let mut out = Vec::<(_, _)>::with_capacity(body.len());
+    let mut optimizer = Optimizer {
+        out: Vec::with_capacity(body.len()),
+    };
+    for instruction in std::mem::take(body).into_vec() {
+        optimizer.push_instruction(instruction);
+    }
+    *body = optimizer.out.into_boxed_slice();
+}
 
-    for (mut instruction, generics) in std::mem::take(body).into_vec() {
+struct Optimizer {
+    out: Vec<(Instruction<Generics>, Generics)>,
+}
+
+impl Deref for Optimizer {
+    type Target = Vec<(Instruction<Generics>, Generics)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.out
+    }
+}
+
+impl DerefMut for Optimizer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.out
+    }
+}
+
+impl Optimizer {
+    fn push_instruction(
+        &mut self,
+        (mut instruction, generics): (Instruction<Generics>, Generics),
+    ) {
         match instruction {
             Instruction::Then(ref mut body) => {
                 optimize_block(body);
-                if let Some((Instruction::PushBool(condition), ..)) = out.last()
+                if let Some((Instruction::PushBool(condition), ..)) =
+                    self.last()
                 {
                     let condition = *condition;
-                    out.pop();
+                    self.pop();
                     if condition {
-                        out.extend(std::mem::take(body).into_vec());
+                        self.extend(std::mem::take(body).into_vec());
                     }
-                    continue;
+                    return;
                 }
             }
             Instruction::Repeat { ref mut body, .. } => {
@@ -32,20 +63,21 @@ fn optimize_block(body: &mut Box<Block<Generics>>) {
             Instruction::ThenElse(ref mut then, ref mut else_) => {
                 optimize_block(then);
                 optimize_block(else_);
-                if let Some((Instruction::PushBool(condition), ..)) = out.last()
+                if let Some((Instruction::PushBool(condition), ..)) =
+                    self.last()
                 {
                     let condition = *condition;
-                    out.pop();
-                    out.extend(
+                    self.pop();
+                    self.extend(
                         std::mem::take(if condition { then } else { else_ })
                             .into_vec(),
                     );
-                    continue;
+                    return;
                 }
             }
             Instruction::BinMathOp(op) => {
                 if let [.., (Instruction::PushI32(a), _), (Instruction::PushI32(b), _)] =
-                    &mut *out
+                    &mut ***self
                 {
                     if let Some(res) = match op {
                         BinMathOp::Add => a.checked_add(*b),
@@ -60,32 +92,34 @@ fn optimize_block(body: &mut Box<Block<Generics>>) {
                         },
                     } {
                         *a = res;
-                        out.pop();
-                        continue;
+                        self.pop();
+                        return;
                     }
                 } else if let [.., (Instruction::PushF32(a), _), (Instruction::PushF32(b), _)] =
-                    &mut *out
+                    &mut ***self
                 {
                     match op {
                         BinMathOp::Add => *a += *b,
                         BinMathOp::Sub => *a -= *b,
                         BinMathOp::Mul => *a *= *b,
                         BinMathOp::Div => *a /= *b,
-                        BinMathOp::Rem | BinMathOp::SillyAdd => unreachable!(),
+                        BinMathOp::Rem | BinMathOp::SillyAdd => {
+                            unreachable!()
+                        }
                     }
-                    out.pop();
-                    continue;
+                    self.pop();
+                    return;
                 }
             }
             Instruction::Sqrt => {
-                if let Some((Instruction::PushF32(n), ..)) = out.last_mut() {
+                if let Some((Instruction::PushF32(n), ..)) = self.last_mut() {
                     *n = n.sqrt();
-                    continue;
+                    return;
                 }
             }
             Instruction::Comparison(op) => {
                 if let [.., (Instruction::PushI32(a), _), (Instruction::PushI32(b), _)] =
-                    &*out
+                    &***self
                 {
                     let res = match op {
                         Comparison::Lt => *a < *b,
@@ -94,26 +128,25 @@ fn optimize_block(body: &mut Box<Block<Generics>>) {
                         Comparison::Ge => *a >= *b,
                         Comparison::Gt => *a > *b,
                     };
-                    out.pop();
-                    out.pop();
-                    out.push((Instruction::PushBool(res), [].into()));
-                    continue;
+                    self.pop();
+                    self.pop();
+                    self.push((Instruction::PushBool(res), [].into()));
+                    return;
                 }
             }
             Instruction::Dup => {
-                if let Some(value) = out.last() {
+                if let Some(value) = self.last() {
                     if trivially_dupable(value) {
-                        out.push(value.clone());
-                        continue;
+                        let value = value.clone();
+                        self.push(value);
+                        return;
                     }
                 }
             }
             _ => {}
         }
-        out.push((instruction, generics));
+        self.push((instruction, generics));
     }
-
-    *body = out.into_boxed_slice();
 }
 
 const fn trivially_dupable(value: &(Instruction<Generics>, Generics)) -> bool {
