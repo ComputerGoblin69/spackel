@@ -143,6 +143,14 @@ impl Optimizer {
                     }
                 }
             }
+            Instruction::Drop => {
+                if let Some(value) = self.last() {
+                    if removable(value) {
+                        self.pop();
+                        return;
+                    }
+                }
+            }
             _ => {}
         }
         self.push((instruction, generics));
@@ -156,4 +164,8 @@ const fn trivially_dupable(value: &(Instruction<Generics>, Generics)) -> bool {
             | Instruction::PushF32(_)
             | Instruction::PushBool(_)
     )
+}
+
+const fn removable(value: &(Instruction<Generics>, Generics)) -> bool {
+    trivially_dupable(value)
 }
