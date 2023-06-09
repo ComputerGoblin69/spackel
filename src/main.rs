@@ -7,6 +7,7 @@ mod interpreter;
 mod ir;
 mod lexer;
 mod peephole;
+mod ssa;
 mod stack;
 mod typ;
 
