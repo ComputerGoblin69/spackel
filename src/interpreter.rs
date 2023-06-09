@@ -20,17 +20,6 @@ enum Value {
     Type(Type),
 }
 
-impl Value {
-    const fn typ(&self) -> Type {
-        match self {
-            Self::Bool(_) => Type::Bool,
-            Self::I32(_) => Type::I32,
-            Self::F32(_) => Type::F32,
-            Self::Type(_) => Type::Type,
-        }
-    }
-}
-
 struct Interpreter<'a> {
     program: &'a crate::typ::CheckedProgram,
     stack: Vec<Value>,
@@ -118,8 +107,8 @@ impl Interpreter<'_> {
             Instruction::PushBool(b) => self.push(Value::Bool(*b)),
             Instruction::PushType(typ) => self.push(Value::Type(typ.clone())),
             Instruction::TypeOf => {
-                let a = self.pop();
-                self.push(Value::Type(a.typ()));
+                self.pop();
+                self.push(Value::Type(generics[0].clone()));
             }
             Instruction::Print if generics[0] == Type::F32 => {
                 print!("{}", self.pop_f32());
