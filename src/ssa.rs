@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use crate::{
     ir::Instruction,
     typ::{FunctionSignature, Generics},
@@ -15,19 +17,80 @@ impl fmt::Debug for Value {
     }
 }
 
-pub struct ValueGenerator(Value);
+#[derive(Clone, Copy)]
+pub struct ValueSequence {
+    start: u32,
+    count: u8,
+}
 
-impl Default for ValueGenerator {
-    fn default() -> Self {
-        Self(Value(0))
+impl fmt::Debug for ValueSequence {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "[{:?}]",
+            (self.start..self.start + u32::from(self.count))
+                .map(Value)
+                .format(", ")
+        )
     }
 }
+
+impl IntoIterator for &ValueSequence {
+    type Item = Value;
+
+    type IntoIter = ValueSequenceIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl std::ops::Add<u8> for ValueSequence {
+    type Output = Value;
+
+    fn add(self, rhs: u8) -> Self::Output {
+        debug_assert!(rhs < self.count);
+        Value(self.start + u32::from(rhs))
+    }
+}
+
+impl ValueSequence {
+    const fn iter(self) -> ValueSequenceIter {
+        ValueSequenceIter(self)
+    }
+}
+
+pub struct ValueSequenceIter(ValueSequence);
+
+impl Iterator for ValueSequenceIter {
+    type Item = Value;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.0.count == 0 {
+            None
+        } else {
+            let res = Value(self.0.start);
+            self.0.start += 1;
+            self.0.count -= 1;
+            Some(res)
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct ValueGenerator(u32);
 
 impl ValueGenerator {
     pub fn new_value(&mut self) -> Value {
         let value = self.0;
-        self.0 .0 += 1;
-        value
+        self.0 += 1;
+        Value(value)
+    }
+
+    pub fn new_value_sequence(&mut self, count: u8) -> ValueSequence {
+        let start = self.0;
+        self.0 += u32::from(count);
+        ValueSequence { start, count }
     }
 }
 
@@ -68,7 +131,7 @@ impl Graph {
 }
 
 pub struct Assignment {
-    pub to: Vec<Value>,
+    pub to: ValueSequence,
     pub args: Vec<Value>,
     pub op: Op,
 }
@@ -216,11 +279,11 @@ impl GraphBuilder<'_> {
                 return;
             }
         };
-        let to = std::iter::repeat_with(|| self.value_generator.new_value())
-            .take(to_count)
-            .collect::<Vec<_>>();
+        let to = self
+            .value_generator
+            .new_value_sequence(to_count.try_into().unwrap());
         let args = self.stack.split_off(self.stack.len() - arg_count);
-        self.stack.extend(to.iter().copied());
+        self.stack.extend(&to);
         self.graph.assignments.push(Assignment { to, args, op });
     }
 }

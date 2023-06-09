@@ -216,29 +216,29 @@ impl Compiler<'_> {
                 let call_args =
                     args.iter().map(|&arg| self.take(arg)).collect::<Vec<_>>();
                 let inst = fb.ins().call(func_ref, &call_args);
-                for (&value, &res) in std::iter::zip(&to, fb.inst_results(inst))
+                for (value, &res) in std::iter::zip(&to, fb.inst_results(inst))
                 {
                     self.set(value, res);
                 }
             }
-            Op::Then(body) => self.compile_then(&to, &args, *body, fb),
+            Op::Then(body) => self.compile_then(to, &args, *body, fb),
             Op::ThenElse(then, else_) => {
-                self.compile_then_else(&to, &args, *then, *else_, fb);
+                self.compile_then_else(to, &args, *then, *else_, fb);
             }
-            Op::Repeat(body) => self.compile_repeat(&to, &args, *body, fb),
+            Op::Repeat(body) => self.compile_repeat(to, &args, *body, fb),
             Op::Dup => {
                 let v = self.take(args[0]);
-                self.ssa_values.insert(to[0], v);
-                self.ssa_values.insert(to[1], v);
+                self.ssa_values.insert(to + 0, v);
+                self.ssa_values.insert(to + 1, v);
             }
             Op::Ins((Instruction::PushI32(number), _)) => {
-                self.set(to[0], fb.ins().iconst(I32, i64::from(number)));
+                self.set(to + 0, fb.ins().iconst(I32, i64::from(number)));
             }
             Op::Ins((Instruction::PushF32(number), _)) => {
-                self.set(to[0], fb.ins().f32const(number));
+                self.set(to + 0, fb.ins().f32const(number));
             }
             Op::Ins((Instruction::PushBool(b), _)) => {
-                self.set(to[0], fb.ins().iconst(I8, i64::from(b)));
+                self.set(to + 0, fb.ins().iconst(I8, i64::from(b)));
             }
             Op::Ins((Instruction::PushType(_) | Instruction::TypeOf, _)) => {
                 todo!();
@@ -275,7 +275,7 @@ impl Compiler<'_> {
                 let a = self.take(args[0]);
                 let b = self.take(args[1]);
                 self.set(
-                    to[0],
+                    to + 0,
                     match (generics.first(), op) {
                         (Some(Type::F32), BinMathOp::Add) => {
                             fb.ins().fadd(a, b)
@@ -300,13 +300,13 @@ impl Compiler<'_> {
             }
             Op::Ins((Instruction::Sqrt, _)) => {
                 let n = self.take(args[0]);
-                self.set(to[0], fb.ins().sqrt(n));
+                self.set(to + 0, fb.ins().sqrt(n));
             }
             Op::Ins((Instruction::Comparison(comparison), _)) => {
                 let a = self.take(args[0]);
                 let b = self.take(args[1]);
                 self.set(
-                    to[0],
+                    to + 0,
                     fb.ins().icmp(
                         match comparison {
                             Comparison::Lt => IntCC::SignedLessThan,
@@ -322,13 +322,13 @@ impl Compiler<'_> {
             }
             Op::Ins((Instruction::Not, _)) => {
                 let b = self.take(args[0]);
-                self.set(to[0], fb.ins().bxor_imm(b, 1));
+                self.set(to + 0, fb.ins().bxor_imm(b, 1));
             }
             Op::Ins((Instruction::BinLogicOp(op), _)) => {
                 let a = self.take(args[0]);
                 let b = self.take(args[1]);
                 self.set(
-                    to[0],
+                    to + 0,
                     match op {
                         BinLogicOp::And => fb.ins().band(a, b),
                         BinLogicOp::Or => fb.ins().bor(a, b),
@@ -355,10 +355,10 @@ impl Compiler<'_> {
                     size: typ.bytes(),
                 });
                 let v = self.take(args[0]);
-                self.set(to[0], v);
+                self.set(to + 0, v);
                 fb.ins().stack_store(v, stack_slot, 0);
                 self.set(
-                    to[1],
+                    to + 1,
                     fb.ins().stack_addr(self.isa.pointer_type(), stack_slot, 0),
                 );
             }
@@ -366,7 +366,7 @@ impl Compiler<'_> {
                 let ptr = self.take(args[0]);
                 let typ = generics[0].to_clif(self.isa).unwrap();
                 self.set(
-                    to[0],
+                    to + 0,
                     fb.ins().load(typ, MemFlags::trusted(), ptr, 0),
                 );
             }
@@ -390,7 +390,7 @@ impl Compiler<'_> {
 
     fn compile_then(
         &mut self,
-        to: &[ssa::Value],
+        to: ssa::ValueSequence,
         args: &[ssa::Value],
         body: ssa::Graph,
         fb: &mut FunctionBuilder,
@@ -422,7 +422,7 @@ impl Compiler<'_> {
         for assignment in body.assignments {
             self.compile_assignment(assignment, fb);
         }
-        for (&value, out) in std::iter::zip(to, &body.outputs) {
+        for (value, out) in std::iter::zip(&to, &body.outputs) {
             self.set(
                 value,
                 fb.append_block_param(
@@ -446,7 +446,7 @@ impl Compiler<'_> {
 
     fn compile_then_else(
         &mut self,
-        to: &[ssa::Value],
+        to: ssa::ValueSequence,
         args: &[ssa::Value],
         then: ssa::Graph,
         else_: ssa::Graph,
@@ -475,7 +475,7 @@ impl Compiler<'_> {
         for assignment in then.assignments {
             self.compile_assignment(assignment, fb);
         }
-        for (&value, &out) in std::iter::zip(to, &then.outputs) {
+        for (value, &out) in std::iter::zip(&to, &then.outputs) {
             let v = self.take(out);
             self.set(
                 value,
@@ -510,7 +510,7 @@ impl Compiler<'_> {
 
     fn compile_repeat(
         &mut self,
-        to: &[ssa::Value],
+        to: ssa::ValueSequence,
         args: &[ssa::Value],
         body: ssa::Graph,
         fb: &mut FunctionBuilder,
@@ -535,7 +535,7 @@ impl Compiler<'_> {
             self.compile_assignment(assignment, fb);
         }
         let (&condition, outputs) = body.outputs.split_last().unwrap();
-        for (&value, out) in std::iter::zip(to, outputs) {
+        for (value, out) in std::iter::zip(&to, outputs) {
             self.set(value, self.ssa_values[out]);
         }
         fb.ins().brif(
