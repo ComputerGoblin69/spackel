@@ -185,8 +185,15 @@ impl GraphBuilder<'_> {
                 ));
                 return;
             }
-            Instruction::Over | Instruction::Tuck => {
-                (3, 2, Op::Ins(instruction))
+            Instruction::Over => (3, 2, Op::Ins(instruction)),
+            Instruction::Tuck => {
+                self.add_instruction((
+                    Instruction::Dup,
+                    Box::new([instruction.1[1]]),
+                ));
+                self.stack.swap(self.stack.len() - 1, self.stack.len() - 2);
+                self.stack.swap(self.stack.len() - 2, self.stack.len() - 3);
+                return;
             }
         };
         let to = std::iter::repeat_with(|| self.value_generator.new_value())
