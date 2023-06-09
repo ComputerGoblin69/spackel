@@ -1,7 +1,7 @@
 use crate::{
     ir::{BinLogicOp, BinMathOp, Comparison, Instruction},
-    stack::Stack,
-    typ::{Generics, Type},
+    ssa::{self, Op},
+    typ::{FunctionSignature, Type},
 };
 use anyhow::Result;
 use cranelift::prelude::{
@@ -26,7 +26,7 @@ pub struct Options<'a> {
 }
 
 pub fn compile(
-    program: &crate::typ::CheckedProgram,
+    program: crate::typ::CheckedProgram,
     options: &Options,
 ) -> Result<()> {
     let mut shared_builder = settings::builder();
@@ -38,6 +38,13 @@ pub fn compile(
         .finish(shared_flags)?;
     let extern_function_signatures = extern_function_signatures(&*isa);
 
+    let function_signatures = program
+        .functions
+        .iter()
+        .map(|(name, function)| (name.clone(), function.signature.clone()))
+        .collect();
+    let value_generator = ssa::ValueGenerator::default();
+
     let object_builder = ObjectBuilder::new(
         isa.clone(),
         [],
@@ -45,41 +52,16 @@ pub fn compile(
     )?;
     let mut object_module = ObjectModule::new(object_builder);
 
-    let function_signatures = program
+    let clif_function_signatures = program
         .functions
         .iter()
         .map(|(name, function)| {
-            let params = function
-                .signature
-                .parameters
-                .iter()
-                .map(|typ| typ.to_clif(&*isa).unwrap())
-                .map(AbiParam::new)
-                .collect();
-            let mut returns = function
-                .signature
-                .returns
-                .iter()
-                .map(|typ| typ.to_clif(&*isa).unwrap())
-                .map(AbiParam::new)
-                .collect::<Vec<_>>();
-            if *name == "main" {
-                returns.push(AbiParam::new(I32));
-            }
-
-            (
-                &**name,
-                Signature {
-                    params,
-                    returns,
-                    call_conv: isa.default_call_conv(),
-                },
-            )
+            (name.clone(), function.signature.to_clif(name, &*isa))
         })
         .collect::<HashMap<_, _>>();
-    let function_ids = function_signatures
+    let function_ids = clif_function_signatures
         .iter()
-        .map(|(&name, signature)| {
+        .map(|(name, signature)| {
             let func_id = if name == "main" {
                 object_module.declare_function(
                     "main",
@@ -90,21 +72,22 @@ pub fn compile(
                 object_module.declare_anonymous_function(signature)
             }
             .unwrap();
-            (name, func_id)
+            (name.clone(), func_id)
         })
         .collect();
 
     let mut compiler = Compiler {
-        program,
         function_ids,
         function_signatures,
-        stack: Vec::new(),
+        clif_function_signatures,
+        value_generator,
+        ssa_values: HashMap::new(),
         isa: &*isa,
         object_module,
         extern_functions: HashMap::new(),
         extern_function_signatures,
     };
-    compiler.compile()?;
+    compiler.compile(program)?;
 
     let object_bytes = compiler.object_module.finish().emit()?;
     let mut object_file = File::create(options.out_path)?;
@@ -114,29 +97,26 @@ pub fn compile(
 }
 
 struct Compiler<'a> {
-    program: &'a crate::typ::CheckedProgram,
-    function_signatures: HashMap<&'a str, Signature>,
-    function_ids: HashMap<&'a str, FuncId>,
-    stack: Vec<Value>,
+    function_signatures: HashMap<String, FunctionSignature>,
+    clif_function_signatures: HashMap<String, Signature>,
+    function_ids: HashMap<String, FuncId>,
+    value_generator: ssa::ValueGenerator,
+    ssa_values: HashMap<ssa::Value, Value>,
     isa: &'a dyn TargetIsa,
     object_module: ObjectModule,
     extern_functions: HashMap<&'static str, FuncId>,
     extern_function_signatures: HashMap<&'static str, Signature>,
 }
 
-impl Stack for Compiler<'_> {
-    type Item = Value;
-
-    fn push(&mut self, element: Self::Item) {
-        self.stack.push(element);
-    }
-
-    fn pop(&mut self) -> Self::Item {
-        self.stack.pop().unwrap()
-    }
-}
-
 impl Compiler<'_> {
+    fn take(&mut self, value: ssa::Value) -> Value {
+        self.ssa_values.remove(&value).unwrap()
+    }
+
+    fn set(&mut self, value: ssa::Value, clif_value: Value) {
+        self.ssa_values.insert(value, clif_value);
+    }
+
     fn call_extern(
         &mut self,
         func_name: &'static str,
@@ -157,12 +137,12 @@ impl Compiler<'_> {
         fb.ins().call(func_ref, args)
     }
 
-    fn compile(&mut self) -> Result<()> {
+    fn compile(&mut self, program: crate::typ::CheckedProgram) -> Result<()> {
         let mut ctx = Context::new();
         let mut func_ctx = FunctionBuilderContext::new();
 
-        for (name, function) in &self.program.functions {
-            self.compile_function(name, function, &mut ctx, &mut func_ctx)?;
+        for (name, function) in program.functions {
+            self.compile_function(&name, function, &mut ctx, &mut func_ctx)?;
         }
 
         Ok(())
@@ -171,32 +151,51 @@ impl Compiler<'_> {
     fn compile_function(
         &mut self,
         name: &str,
-        function: &crate::typ::CheckedFunction,
+        function: crate::typ::CheckedFunction,
         ctx: &mut Context,
         func_ctx: &mut FunctionBuilderContext,
     ) -> Result<()> {
-        let signature = self.function_signatures[name].clone();
+        let signature = self.clif_function_signatures[name].clone();
+        let input_count = signature.params.len().try_into().unwrap();
         let func_id = self.function_ids[name];
         ctx.clear();
         ctx.func =
             Function::with_name_signature(UserFuncName::default(), signature);
 
+        let mut graph = ssa::Graph::from_block(
+            function.body,
+            input_count,
+            &self.function_signatures,
+            &mut self.value_generator,
+        );
+
         let mut fb = FunctionBuilder::new(&mut ctx.func, func_ctx);
         let block = fb.create_block();
         fb.append_block_params_for_function_params(block);
-        self.stack = fb.block_params(block).to_vec();
+        for (&ssa_value, &param) in
+            std::iter::zip(&graph.inputs, fb.block_params(block))
+        {
+            self.set(ssa_value, param);
+        }
         fb.switch_to_block(block);
         fb.seal_block(block);
 
-        for instruction in &*function.body {
-            self.compile_instruction(instruction, &mut fb);
+        for assignment in graph.assignments {
+            self.compile_assignment(assignment, &mut fb);
         }
 
         if name == "main" {
-            // Exit code
-            self.stack.push(fb.ins().iconst(I32, 0));
+            let exit_code = self.value_generator.new_value();
+            self.set(exit_code, fb.ins().iconst(I32, 0));
+            graph.outputs.push(exit_code);
         }
-        fb.ins().return_(&self.stack);
+        fb.ins().return_(
+            &graph
+                .outputs
+                .iter()
+                .map(|output| self.ssa_values[output])
+                .collect::<Vec<_>>(),
+        );
 
         fb.finalize();
         self.object_module.define_function(func_id, ctx)?;
@@ -204,47 +203,48 @@ impl Compiler<'_> {
         Ok(())
     }
 
-    fn compile_instruction(
+    fn compile_assignment(
         &mut self,
-        (instruction, generics): &(Instruction<Generics>, Generics),
+        ssa::Assignment { to, args, op }: ssa::Assignment,
         fb: &mut FunctionBuilder,
     ) {
-        match instruction {
-            Instruction::Call(name) => {
-                let function = &self.program.functions[&**name];
-                let param_count = function.signature.parameters.len();
-                let func_id = self.function_ids[&**name];
+        match op {
+            Op::Ins((Instruction::Call(name), _)) => {
+                let func_id = self.function_ids[&*name];
                 let func_ref =
                     self.object_module.declare_func_in_func(func_id, fb.func);
-                let inst = fb.ins().call(
-                    func_ref,
-                    &self.stack[self.stack.len() - param_count..],
-                );
-                self.stack.truncate(self.stack.len() - param_count);
-                self.stack.extend(fb.inst_results(inst));
-            }
-            Instruction::Then(body) => self.compile_then(body, fb),
-            Instruction::ThenElse(then, else_) => {
-                self.compile_then_else(then, else_, fb);
-            }
-            Instruction::Repeat { body, .. } => self.compile_repeat(body, fb),
-            Instruction::Unsafe(body) => {
-                for instruction in &**body {
-                    self.compile_instruction(instruction, fb);
+                let call_args =
+                    args.iter().map(|&arg| self.take(arg)).collect::<Vec<_>>();
+                let inst = fb.ins().call(func_ref, &call_args);
+                for (&value, &res) in std::iter::zip(&to, fb.inst_results(inst))
+                {
+                    self.set(value, res);
                 }
             }
-            Instruction::PushI32(number) => {
-                self.stack.push(fb.ins().iconst(I32, i64::from(*number)));
+            Op::Then(body) => self.compile_then(&to, &args, *body, fb),
+            Op::ThenElse(then, else_) => {
+                self.compile_then_else(&to, &args, *then, *else_, fb);
             }
-            Instruction::PushF32(number) => {
-                self.stack.push(fb.ins().f32const(*number));
+            Op::Repeat(body) => self.compile_repeat(&to, &args, *body, fb),
+            Op::Dup => {
+                let v = self.take(args[0]);
+                self.ssa_values.insert(to[0], v);
+                self.ssa_values.insert(to[1], v);
             }
-            Instruction::PushBool(b) => {
-                self.stack.push(fb.ins().iconst(I8, i64::from(*b)));
+            Op::Ins((Instruction::PushI32(number), _)) => {
+                self.set(to[0], fb.ins().iconst(I32, i64::from(number)));
             }
-            Instruction::PushType(_) | Instruction::TypeOf => todo!(),
-            Instruction::Print => {
-                let n = self.pop();
+            Op::Ins((Instruction::PushF32(number), _)) => {
+                self.set(to[0], fb.ins().f32const(number));
+            }
+            Op::Ins((Instruction::PushBool(b), _)) => {
+                self.set(to[0], fb.ins().iconst(I8, i64::from(b)));
+            }
+            Op::Ins((Instruction::PushType(_) | Instruction::TypeOf, _)) => {
+                todo!();
+            }
+            Op::Ins((Instruction::Print, generics)) => {
+                let n = self.take(args[0]);
                 self.call_extern(
                     if generics[0] == Type::F32 {
                         "spkl_print_f32"
@@ -255,8 +255,8 @@ impl Compiler<'_> {
                     fb,
                 );
             }
-            Instruction::Println => {
-                let n = self.pop();
+            Op::Ins((Instruction::Println, generics)) => {
+                let n = self.take(args[0]);
                 self.call_extern(
                     if generics[0] == Type::F32 {
                         "spkl_println_f32"
@@ -267,201 +267,287 @@ impl Compiler<'_> {
                     fb,
                 );
             }
-            Instruction::PrintChar => {
-                let n = self.pop();
+            Op::Ins((Instruction::PrintChar, _)) => {
+                let n = self.take(args[0]);
                 self.call_extern("spkl_print_char", &[n], fb);
             }
-            Instruction::BinMathOp(op) => {
-                let b = self.pop();
-                let a = self.pop();
-                self.push(match (generics.first(), op) {
-                    (Some(Type::F32), BinMathOp::Add) => fb.ins().fadd(a, b),
-                    (Some(Type::F32), BinMathOp::Sub) => fb.ins().fsub(a, b),
-                    (Some(Type::F32), BinMathOp::Mul) => fb.ins().fmul(a, b),
-                    (Some(Type::F32), BinMathOp::Div) => fb.ins().fdiv(a, b),
-                    (_, BinMathOp::Add) => fb.ins().iadd(a, b),
-                    (_, BinMathOp::Sub) => fb.ins().isub(a, b),
-                    (_, BinMathOp::Mul) => fb.ins().imul(a, b),
-                    (_, BinMathOp::Div) => fb.ins().sdiv(a, b),
-                    (_, BinMathOp::Rem) => fb.ins().srem(a, b),
-                    (_, BinMathOp::SillyAdd) => todo!(),
-                });
-            }
-            Instruction::Sqrt => {
-                let n = self.pop();
-                self.push(fb.ins().sqrt(n));
-            }
-            Instruction::Comparison(comparison) => {
-                let b = self.pop();
-                let a = self.pop();
-                self.push(fb.ins().icmp(
-                    match comparison {
-                        Comparison::Lt => IntCC::SignedLessThan,
-                        Comparison::Le => IntCC::SignedLessThanOrEqual,
-                        Comparison::Eq => IntCC::Equal,
-                        Comparison::Ge => IntCC::SignedGreaterThanOrEqual,
-                        Comparison::Gt => IntCC::SignedGreaterThan,
+            Op::Ins((Instruction::BinMathOp(op), generics)) => {
+                let a = self.take(args[0]);
+                let b = self.take(args[1]);
+                self.set(
+                    to[0],
+                    match (generics.first(), op) {
+                        (Some(Type::F32), BinMathOp::Add) => {
+                            fb.ins().fadd(a, b)
+                        }
+                        (Some(Type::F32), BinMathOp::Sub) => {
+                            fb.ins().fsub(a, b)
+                        }
+                        (Some(Type::F32), BinMathOp::Mul) => {
+                            fb.ins().fmul(a, b)
+                        }
+                        (Some(Type::F32), BinMathOp::Div) => {
+                            fb.ins().fdiv(a, b)
+                        }
+                        (_, BinMathOp::Add) => fb.ins().iadd(a, b),
+                        (_, BinMathOp::Sub) => fb.ins().isub(a, b),
+                        (_, BinMathOp::Mul) => fb.ins().imul(a, b),
+                        (_, BinMathOp::Div) => fb.ins().sdiv(a, b),
+                        (_, BinMathOp::Rem) => fb.ins().srem(a, b),
+                        (_, BinMathOp::SillyAdd) => todo!(),
                     },
-                    a,
-                    b,
-                ));
+                );
             }
-            Instruction::Not => {
-                let b = self.pop();
-                self.push(fb.ins().bxor_imm(b, 1));
+            Op::Ins((Instruction::Sqrt, _)) => {
+                let n = self.take(args[0]);
+                self.set(to[0], fb.ins().sqrt(n));
             }
-            Instruction::BinLogicOp(op) => {
-                let b = self.pop();
-                let a = self.pop();
-                self.push(match op {
-                    BinLogicOp::And => fb.ins().band(a, b),
-                    BinLogicOp::Or => fb.ins().bor(a, b),
-                    BinLogicOp::Xor => fb.ins().bxor(a, b),
-                    BinLogicOp::Nand => {
-                        let res = fb.ins().band(a, b);
-                        fb.ins().bxor_imm(res, 1)
-                    }
-                    BinLogicOp::Nor => {
-                        let res = fb.ins().bor(a, b);
-                        fb.ins().bxor_imm(res, 1)
-                    }
-                    BinLogicOp::Xnor => {
-                        let res = fb.ins().bxor(a, b);
-                        fb.ins().bxor_imm(res, 1)
-                    }
-                });
+            Op::Ins((Instruction::Comparison(comparison), _)) => {
+                let a = self.take(args[0]);
+                let b = self.take(args[1]);
+                self.set(
+                    to[0],
+                    fb.ins().icmp(
+                        match comparison {
+                            Comparison::Lt => IntCC::SignedLessThan,
+                            Comparison::Le => IntCC::SignedLessThanOrEqual,
+                            Comparison::Eq => IntCC::Equal,
+                            Comparison::Ge => IntCC::SignedGreaterThanOrEqual,
+                            Comparison::Gt => IntCC::SignedGreaterThan,
+                        },
+                        a,
+                        b,
+                    ),
+                );
             }
-            Instruction::AddrOf => {
+            Op::Ins((Instruction::Not, _)) => {
+                let b = self.take(args[0]);
+                self.set(to[0], fb.ins().bxor_imm(b, 1));
+            }
+            Op::Ins((Instruction::BinLogicOp(op), _)) => {
+                let a = self.take(args[0]);
+                let b = self.take(args[1]);
+                self.set(
+                    to[0],
+                    match op {
+                        BinLogicOp::And => fb.ins().band(a, b),
+                        BinLogicOp::Or => fb.ins().bor(a, b),
+                        BinLogicOp::Xor => fb.ins().bxor(a, b),
+                        BinLogicOp::Nand => {
+                            let res = fb.ins().band(a, b);
+                            fb.ins().bxor_imm(res, 1)
+                        }
+                        BinLogicOp::Nor => {
+                            let res = fb.ins().bor(a, b);
+                            fb.ins().bxor_imm(res, 1)
+                        }
+                        BinLogicOp::Xnor => {
+                            let res = fb.ins().bxor(a, b);
+                            fb.ins().bxor_imm(res, 1)
+                        }
+                    },
+                );
+            }
+            Op::Ins((Instruction::AddrOf, generics)) => {
                 let typ = generics[0].to_clif(self.isa).unwrap();
                 let stack_slot = fb.create_sized_stack_slot(StackSlotData {
                     kind: StackSlotKind::ExplicitSlot,
                     size: typ.bytes(),
                 });
-                self.dup();
-                let v = self.pop();
+                let v = self.take(args[0]);
+                self.set(to[0], v);
                 fb.ins().stack_store(v, stack_slot, 0);
-                self.push(fb.ins().stack_addr(
-                    self.isa.pointer_type(),
-                    stack_slot,
-                    0,
-                ));
+                self.set(
+                    to[1],
+                    fb.ins().stack_addr(self.isa.pointer_type(), stack_slot, 0),
+                );
             }
-            Instruction::ReadPtr => {
-                let ptr = self.pop();
+            Op::Ins((Instruction::ReadPtr, generics)) => {
+                let ptr = self.take(args[0]);
                 let typ = generics[0].to_clif(self.isa).unwrap();
-                self.push(fb.ins().load(typ, MemFlags::trusted(), ptr, 0));
+                self.set(
+                    to[0],
+                    fb.ins().load(typ, MemFlags::trusted(), ptr, 0),
+                );
             }
-            Instruction::Drop => {
-                self.pop();
+            Op::Ins((Instruction::Drop, _)) => {
+                self.take(args[0]);
             }
-            Instruction::Dup => self.dup(),
-            Instruction::Swap => self.swap(),
-            Instruction::Over => self.over(),
-            Instruction::Nip => self.nip(),
-            Instruction::Tuck => self.tuck(),
+            Op::Ins((
+                Instruction::Then(..)
+                | Instruction::ThenElse(..)
+                | Instruction::Repeat { .. }
+                | Instruction::Unsafe(..)
+                | Instruction::Dup
+                | Instruction::Swap
+                | Instruction::Nip
+                | Instruction::Tuck
+                | Instruction::Over,
+                _,
+            )) => unreachable!(),
         }
     }
 
     fn compile_then(
         &mut self,
-        body: &[(Instruction<Generics>, Generics)],
+        to: &[ssa::Value],
+        args: &[ssa::Value],
+        body: ssa::Graph,
         fb: &mut FunctionBuilder,
     ) {
+        let (&condition, args) = args.split_last().unwrap();
+
+        for (&arg, &input) in std::iter::zip(args, &body.inputs) {
+            let clif_value = self.take(arg);
+            self.set(input, clif_value);
+        }
+
         let then = fb.create_block();
         let after = fb.create_block();
 
-        let condition = self.pop();
-        fb.ins().brif(condition, then, &[], after, &self.stack);
+        let condition = self.take(condition);
+        fb.ins().brif(
+            condition,
+            then,
+            &[],
+            after,
+            &args
+                .iter()
+                .map(|arg| self.ssa_values[arg])
+                .collect::<Vec<_>>(),
+        );
         fb.seal_block(then);
 
-        let params_after = self
-            .stack
-            .iter()
-            .map(|&value| {
-                fb.append_block_param(after, fb.func.dfg.value_type(value))
-            })
-            .collect();
-
         fb.switch_to_block(then);
-        for instruction in body {
-            self.compile_instruction(instruction, fb);
+        for assignment in body.assignments {
+            self.compile_assignment(assignment, fb);
         }
-        fb.ins().jump(after, &self.stack);
+        for (&value, out) in std::iter::zip(to, &body.outputs) {
+            self.set(
+                value,
+                fb.append_block_param(
+                    after,
+                    fb.func.dfg.value_type(self.ssa_values[out]),
+                ),
+            );
+        }
+        fb.ins().jump(
+            after,
+            &body
+                .outputs
+                .iter()
+                .map(|&out| self.take(out))
+                .collect::<Vec<_>>(),
+        );
         fb.seal_block(after);
 
         fb.switch_to_block(after);
-        self.stack = params_after;
     }
 
     fn compile_then_else(
         &mut self,
-        then: &[(Instruction<Generics>, Generics)],
-        else_: &[(Instruction<Generics>, Generics)],
+        to: &[ssa::Value],
+        args: &[ssa::Value],
+        then: ssa::Graph,
+        else_: ssa::Graph,
         fb: &mut FunctionBuilder,
     ) {
+        let (&condition, args) = args.split_last().unwrap();
+
+        for (arg, &input) in std::iter::zip(args, &then.inputs) {
+            self.set(input, self.ssa_values[arg]);
+        }
+        for (&arg, &input) in std::iter::zip(args, &else_.inputs) {
+            let clif_value = self.take(arg);
+            self.set(input, clif_value);
+        }
+
         let then_block = fb.create_block();
         let else_block = fb.create_block();
         let after_block = fb.create_block();
 
-        let condition = self.pop();
+        let condition = self.take(condition);
         fb.ins().brif(condition, then_block, &[], else_block, &[]);
         fb.seal_block(then_block);
         fb.seal_block(else_block);
 
-        let params_before = self.stack.clone();
         fb.switch_to_block(then_block);
-        for instruction in then {
-            self.compile_instruction(instruction, fb);
+        for assignment in then.assignments {
+            self.compile_assignment(assignment, fb);
         }
-        let params_after = self
-            .stack
-            .iter()
-            .map(|&value| {
-                fb.append_block_param(
-                    after_block,
-                    fb.func.dfg.value_type(value),
-                )
-            })
-            .collect();
-        fb.ins().jump(after_block, &self.stack);
+        for (&value, &out) in std::iter::zip(to, &then.outputs) {
+            let v = self.take(out);
+            self.set(
+                value,
+                fb.append_block_param(after_block, fb.func.dfg.value_type(v)),
+            );
+        }
+        fb.ins().jump(
+            after_block,
+            &then
+                .outputs
+                .iter()
+                .map(|&out| self.take(out))
+                .collect::<Vec<_>>(),
+        );
 
         fb.switch_to_block(else_block);
-        self.stack = params_before;
-        for instruction in else_ {
-            self.compile_instruction(instruction, fb);
+        for assignment in else_.assignments {
+            self.compile_assignment(assignment, fb);
         }
-        fb.ins().jump(after_block, &self.stack);
+        fb.ins().jump(
+            after_block,
+            &else_
+                .outputs
+                .iter()
+                .map(|&out| self.take(out))
+                .collect::<Vec<_>>(),
+        );
         fb.seal_block(after_block);
 
         fb.switch_to_block(after_block);
-        self.stack = params_after;
     }
 
     fn compile_repeat(
         &mut self,
-        body: &[(Instruction<Generics>, Generics)],
+        to: &[ssa::Value],
+        args: &[ssa::Value],
+        body: ssa::Graph,
         fb: &mut FunctionBuilder,
     ) {
         let loop_block = fb.create_block();
         let after_block = fb.create_block();
 
-        let loop_params = self
-            .stack
-            .iter()
-            .map(|&value| {
-                fb.append_block_param(loop_block, fb.func.dfg.value_type(value))
-            })
-            .collect();
-
-        fb.ins().jump(loop_block, &self.stack);
-        fb.switch_to_block(loop_block);
-        self.stack = loop_params;
-        for instruction in body {
-            self.compile_instruction(instruction, fb);
+        for (arg, &input) in std::iter::zip(args, &body.inputs) {
+            let v = self.ssa_values[arg];
+            self.set(
+                input,
+                fb.append_block_param(loop_block, fb.func.dfg.value_type(v)),
+            );
         }
-        let condition = self.pop();
-        fb.ins()
-            .brif(condition, loop_block, &self.stack, after_block, &[]);
+
+        fb.ins().jump(
+            loop_block,
+            &args.iter().map(|&arg| self.take(arg)).collect::<Vec<_>>(),
+        );
+        fb.switch_to_block(loop_block);
+        for assignment in body.assignments {
+            self.compile_assignment(assignment, fb);
+        }
+        let (&condition, outputs) = body.outputs.split_last().unwrap();
+        for (&value, out) in std::iter::zip(to, outputs) {
+            self.set(value, self.ssa_values[out]);
+        }
+        fb.ins().brif(
+            self.take(condition),
+            loop_block,
+            &outputs
+                .iter()
+                .map(|&out| self.take(out))
+                .collect::<Vec<_>>(),
+            after_block,
+            &[],
+        );
         fb.seal_block(loop_block);
         fb.seal_block(after_block);
 
@@ -527,5 +613,29 @@ impl Type {
             Self::Type => return None,
             Self::Ptr(_) => isa.pointer_type(),
         })
+    }
+}
+
+impl FunctionSignature {
+    fn to_clif(&self, name: &str, isa: &dyn TargetIsa) -> Signature {
+        let params = self
+            .parameters
+            .iter()
+            .map(|typ| AbiParam::new(typ.to_clif(isa).unwrap()))
+            .collect();
+        let mut returns = self
+            .returns
+            .iter()
+            .map(|typ| AbiParam::new(typ.to_clif(isa).unwrap()))
+            .collect::<Vec<_>>();
+        if name == "main" {
+            returns.push(AbiParam::new(I32));
+        }
+
+        Signature {
+            params,
+            returns,
+            call_conv: isa.default_call_conv(),
+        }
     }
 }

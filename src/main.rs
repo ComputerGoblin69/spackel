@@ -8,7 +8,6 @@ mod ir;
 mod lexer;
 mod peephole;
 mod ssa;
-mod stack;
 mod typ;
 
 use anyhow::{bail, ensure, Context, Result};
@@ -65,7 +64,7 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
                 target_triple: "x86_64-unknown-linux-gnu",
                 out_path: Path::new("main.o"),
             };
-            compiler::compile(&program, &compilation_options)
+            compiler::compile(program, &compilation_options)
         }
     }
 }
