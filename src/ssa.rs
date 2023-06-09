@@ -163,8 +163,7 @@ impl GraphBuilder<'_> {
             Instruction::Print
             | Instruction::Println
             | Instruction::PrintChar
-            | Instruction::Drop
-            | Instruction::Nip => (0, 1, Op::Ins(instruction)),
+            | Instruction::Drop => (0, 1, Op::Ins(instruction)),
             Instruction::TypeOf
             | Instruction::Sqrt
             | Instruction::Not
@@ -176,6 +175,14 @@ impl GraphBuilder<'_> {
             Instruction::Dup => (2, 1, Op::Ins(instruction)),
             Instruction::Swap => {
                 self.stack.swap(self.stack.len() - 1, self.stack.len() - 2);
+                return;
+            }
+            Instruction::Nip => {
+                self.add_instruction((Instruction::Swap, instruction.1));
+                self.add_instruction((
+                    Instruction::Drop,
+                    Box::new([instruction.1[0]]),
+                ));
                 return;
             }
             Instruction::Over | Instruction::Tuck => {
