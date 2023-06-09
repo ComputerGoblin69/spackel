@@ -7,7 +7,7 @@ use std::{collections::HashMap, fmt};
 type GInstruction = (Instruction<Generics>, Generics);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct Value(u32);
+pub struct Value(u32);
 
 impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -24,7 +24,7 @@ impl Default for ValueGenerator {
 }
 
 impl ValueGenerator {
-    fn new_value(&mut self) -> Value {
+    pub fn new_value(&mut self) -> Value {
         let value = self.0;
         self.0 .0 += 1;
         value
@@ -33,9 +33,9 @@ impl ValueGenerator {
 
 #[derive(Debug)]
 pub struct Graph {
-    inputs: Vec<Value>,
-    assignments: Vec<Assignment>,
-    outputs: Vec<Value>,
+    pub inputs: Vec<Value>,
+    pub assignments: Vec<Assignment>,
+    pub outputs: Vec<Value>,
 }
 
 impl Graph {
@@ -67,10 +67,10 @@ impl Graph {
     }
 }
 
-struct Assignment {
-    to: Vec<Value>,
-    args: Vec<Value>,
-    op: Op,
+pub struct Assignment {
+    pub to: Vec<Value>,
+    pub args: Vec<Value>,
+    pub op: Op,
 }
 
 impl fmt::Debug for Assignment {
@@ -80,7 +80,7 @@ impl fmt::Debug for Assignment {
 }
 
 #[derive(Debug)]
-enum Op {
+pub enum Op {
     Ins(GInstruction),
     Then(Box<Graph>),
     ThenElse(Box<Graph>, Box<Graph>),
