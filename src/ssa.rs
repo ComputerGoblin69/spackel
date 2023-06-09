@@ -82,6 +82,7 @@ impl fmt::Debug for Assignment {
 #[derive(Debug)]
 pub enum Op {
     Ins(GInstruction),
+    Dup,
     Then(Box<Graph>),
     ThenElse(Box<Graph>, Box<Graph>),
     Repeat(Box<Graph>),
@@ -156,6 +157,7 @@ impl GraphBuilder<'_> {
                 }
                 return;
             }
+            Instruction::Dup => (2, 1, Op::Dup),
             Instruction::PushI32(_)
             | Instruction::PushF32(_)
             | Instruction::PushBool(_)
@@ -172,7 +174,6 @@ impl GraphBuilder<'_> {
             Instruction::BinMathOp(_)
             | Instruction::Comparison(_)
             | Instruction::BinLogicOp(_) => (1, 2, Op::Ins(instruction)),
-            Instruction::Dup => (2, 1, Op::Ins(instruction)),
             Instruction::Swap => {
                 self.stack.swap(self.stack.len() - 1, self.stack.len() - 2);
                 return;
