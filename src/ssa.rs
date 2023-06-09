@@ -174,7 +174,10 @@ impl GraphBuilder<'_> {
             | Instruction::Comparison(_)
             | Instruction::BinLogicOp(_) => (1, 2, Op::Ins(instruction)),
             Instruction::Dup => (2, 1, Op::Ins(instruction)),
-            Instruction::Swap => (2, 2, Op::Ins(instruction)),
+            Instruction::Swap => {
+                self.stack.swap(self.stack.len() - 1, self.stack.len() - 2);
+                return;
+            }
             Instruction::Over | Instruction::Tuck => {
                 (3, 2, Op::Ins(instruction))
             }
