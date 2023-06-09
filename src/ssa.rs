@@ -175,33 +175,44 @@ impl GraphBuilder<'_> {
             | Instruction::Comparison(_)
             | Instruction::BinLogicOp(_) => (1, 2, Op::Ins(instruction)),
             Instruction::Swap => {
-                self.stack.swap(self.stack.len() - 1, self.stack.len() - 2);
+                let a = self.stack.len() - 2;
+                let b = self.stack.len() - 1;
+                self.stack.swap(a, b);
                 return;
             }
             Instruction::Nip => {
+                let dropped_type = instruction.1[0].clone();
                 self.add_instruction((Instruction::Swap, instruction.1));
                 self.add_instruction((
                     Instruction::Drop,
-                    Box::new([instruction.1[0]]),
+                    Box::new([dropped_type]),
                 ));
                 return;
             }
             Instruction::Over => {
-                self.stack.swap(self.stack.len() - 1, self.stack.len() - 2);
+                let a = self.stack.len() - 2;
+                let b = self.stack.len() - 1;
+                self.stack.swap(a, b);
                 self.add_instruction((
                     Instruction::Dup,
-                    Box::new([instruction.1[0]]),
+                    Box::new([instruction.1[0].clone()]),
                 ));
-                self.stack.swap(self.stack.len() - 2, self.stack.len() - 3);
+                let a = self.stack.len() - 3;
+                let b = self.stack.len() - 2;
+                self.stack.swap(a, b);
                 return;
             }
             Instruction::Tuck => {
                 self.add_instruction((
                     Instruction::Dup,
-                    Box::new([instruction.1[1]]),
+                    Box::new([instruction.1[1].clone()]),
                 ));
-                self.stack.swap(self.stack.len() - 1, self.stack.len() - 2);
-                self.stack.swap(self.stack.len() - 2, self.stack.len() - 3);
+                let a = self.stack.len() - 2;
+                let new_a = self.stack.len() - 1;
+                self.stack.swap(a, new_a);
+                let b = self.stack.len() - 3;
+                let new_a = self.stack.len() - 2;
+                self.stack.swap(b, new_a);
                 return;
             }
         };
