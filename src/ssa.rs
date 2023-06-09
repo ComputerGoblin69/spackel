@@ -6,7 +6,7 @@ use std::{collections::HashMap, fmt};
 
 type GInstruction = (Instruction<Generics>, Generics);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct Value(u32);
 
 impl fmt::Debug for Value {
