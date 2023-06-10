@@ -168,6 +168,9 @@ impl Compiler<'_> {
             &self.function_signatures,
             &mut self.value_generator,
         );
+        if std::env::var_os("SPACKEL_PRINT_SSA").is_some() {
+            eprintln!("{name}: {graph:#?}");
+        }
 
         let mut fb = FunctionBuilder::new(&mut ctx.func, func_ctx);
         let block = fb.create_block();
