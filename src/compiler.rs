@@ -401,8 +401,8 @@ impl Compiler<'_> {
     ) {
         let (&condition, args) = args.split_last().unwrap();
 
-        for (&arg, &input) in std::iter::zip(args, &body.inputs) {
-            let clif_value = self.take(arg);
+        for (arg, &input) in std::iter::zip(args, &body.inputs) {
+            let clif_value = self.ssa_values[arg];
             self.set(input, clif_value);
         }
 
@@ -415,10 +415,7 @@ impl Compiler<'_> {
             then,
             &[],
             after,
-            &args
-                .iter()
-                .map(|arg| self.ssa_values[arg])
-                .collect::<Vec<_>>(),
+            &args.iter().map(|&arg| self.take(arg)).collect::<Vec<_>>(),
         );
         fb.seal_block(then);
 
