@@ -1,14 +1,13 @@
-use itertools::Itertools;
-
 use crate::{
     ir::Instruction,
     typ::{FunctionSignature, Generics},
 };
-use std::{collections::HashMap, fmt};
+use itertools::Itertools;
+use std::{collections::HashMap, fmt, ops::Range};
 
 type GInstruction = (Instruction<Generics>, Generics);
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Value(u32);
 
 impl fmt::Debug for Value {
@@ -17,7 +16,7 @@ impl fmt::Debug for Value {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct ValueSequence {
     start: u32,
     count: u8,
@@ -32,6 +31,15 @@ impl fmt::Debug for ValueSequence {
                 .map(Value)
                 .format(", ")
         )
+    }
+}
+
+impl From<Value> for ValueSequence {
+    fn from(value: Value) -> Self {
+        Self {
+            start: value.0,
+            count: 1,
+        }
     }
 }
 
@@ -57,6 +65,10 @@ impl std::ops::Add<u8> for ValueSequence {
 impl ValueSequence {
     const fn iter(self) -> ValueSequenceIter {
         ValueSequenceIter(self)
+    }
+
+    fn range(self) -> Range<Value> {
+        Value(self.start)..Value(self.start + u32::from(self.count))
     }
 }
 
@@ -127,6 +139,14 @@ impl Graph {
         }
         graph.outputs = graph_builder.stack;
         graph
+    }
+
+    fn source_of(&self, value: Value) -> &Assignment {
+        // TODO: reduce time complexity
+        self.assignments
+            .iter()
+            .find(|assignment| assignment.to.range().contains(&value))
+            .unwrap()
     }
 }
 
