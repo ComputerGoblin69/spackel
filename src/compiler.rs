@@ -234,6 +234,9 @@ impl Compiler<'_> {
                 self.ssa_values.insert(to + 0, v);
                 self.ssa_values.insert(to + 1, v);
             }
+            Op::Drop => {
+                self.take(args[0]);
+            }
             Op::Ins((Instruction::PushI32(number), _)) => {
                 self.set(to + 0, fb.ins().iconst(I32, i64::from(number)));
             }
@@ -373,15 +376,13 @@ impl Compiler<'_> {
                     fb.ins().load(typ, MemFlags::trusted(), ptr, 0),
                 );
             }
-            Op::Ins((Instruction::Drop, _)) => {
-                self.take(args[0]);
-            }
             Op::Ins((
                 Instruction::Then(..)
                 | Instruction::ThenElse(..)
                 | Instruction::Repeat { .. }
                 | Instruction::Unsafe(..)
                 | Instruction::Dup
+                | Instruction::Drop
                 | Instruction::Swap
                 | Instruction::Nip
                 | Instruction::Tuck

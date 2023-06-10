@@ -146,6 +146,7 @@ impl fmt::Debug for Assignment {
 pub enum Op {
     Ins(GInstruction),
     Dup,
+    Drop,
     Then(Box<Graph>),
     ThenElse(Box<Graph>, Box<Graph>),
     Repeat(Box<Graph>),
@@ -221,14 +222,14 @@ impl GraphBuilder<'_> {
                 return;
             }
             Instruction::Dup => (2, 1, Op::Dup),
+            Instruction::Drop => (0, 1, Op::Drop),
             Instruction::PushI32(_)
             | Instruction::PushF32(_)
             | Instruction::PushBool(_)
             | Instruction::PushType(_) => (1, 0, Op::Ins(instruction)),
             Instruction::Print
             | Instruction::Println
-            | Instruction::PrintChar
-            | Instruction::Drop => (0, 1, Op::Ins(instruction)),
+            | Instruction::PrintChar => (0, 1, Op::Ins(instruction)),
             Instruction::TypeOf
             | Instruction::Sqrt
             | Instruction::Not
