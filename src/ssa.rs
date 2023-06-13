@@ -1,9 +1,9 @@
 use crate::{
-    ir::Instruction,
+    ir::{BinMathOp, Comparison, Instruction},
     typ::{FunctionSignature, Generics},
 };
 use itertools::Itertools;
-use std::{collections::HashMap, fmt, ops::Range};
+use std::{collections::HashMap, fmt, mem, ops::Range};
 
 type GInstruction = (Instruction<Generics>, Generics);
 
@@ -106,7 +106,7 @@ impl ValueGenerator {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Graph {
     pub inputs: Vec<Value>,
     pub assignments: Vec<Assignment>,
@@ -133,6 +133,7 @@ impl Graph {
             function_signatures,
             value_generator,
             stack: inputs,
+            renames: HashMap::new(),
         };
         for instruction in block.into_vec() {
             graph_builder.add_instruction(instruction);
@@ -141,15 +142,16 @@ impl Graph {
         graph
     }
 
-    fn source_of(&self, value: Value) -> &Assignment {
+    fn source_op(&self, value: Value) -> Option<&Op> {
         // TODO: reduce time complexity
         self.assignments
             .iter()
             .find(|assignment| assignment.to.range().contains(&value))
-            .unwrap()
+            .map(|assignment| &assignment.op)
     }
 }
 
+#[derive(Clone)]
 pub struct Assignment {
     pub to: ValueSequence,
     pub args: Vec<Value>,
@@ -162,7 +164,7 @@ impl fmt::Debug for Assignment {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Op {
     Ins(GInstruction),
     Dup,
@@ -172,11 +174,26 @@ pub enum Op {
     Repeat(Box<Graph>),
 }
 
+impl Op {
+    const fn trivially_dupable(&self) -> bool {
+        matches!(
+            self,
+            Self::Ins((
+                Instruction::PushI32(_)
+                    | Instruction::PushF32(_)
+                    | Instruction::PushBool(_),
+                _
+            ))
+        )
+    }
+}
+
 struct GraphBuilder<'g> {
     graph: &'g mut Graph,
     function_signatures: &'g HashMap<String, FunctionSignature>,
     value_generator: &'g mut ValueGenerator,
     stack: Vec<Value>,
+    renames: HashMap<Value, Value>,
 }
 
 impl GraphBuilder<'_> {
@@ -305,6 +322,196 @@ impl GraphBuilder<'_> {
             .new_value_sequence(to_count.try_into().unwrap());
         let args = self.stack.split_off(self.stack.len() - arg_count);
         self.stack.extend(&to);
+        self.add(Assignment { to, args, op });
+    }
+
+    fn drop(&mut self, value: Value) {
+        self.add(Assignment {
+            to: ValueSequence::default(),
+            args: vec![value],
+            op: Op::Drop,
+        });
+    }
+
+    fn i32(&mut self, to: Value, n: i32) {
+        self.add(Assignment {
+            to: to.into(),
+            args: Vec::new(),
+            op: Op::Ins((Instruction::PushI32(n), [].into())),
+        });
+    }
+
+    fn f32(&mut self, to: Value, n: f32) {
+        self.add(Assignment {
+            to: to.into(),
+            args: Vec::new(),
+            op: Op::Ins((Instruction::PushF32(n), [].into())),
+        });
+    }
+
+    fn bool(&mut self, to: Value, b: bool) {
+        self.add(Assignment {
+            to: to.into(),
+            args: Vec::new(),
+            op: Op::Ins((Instruction::PushBool(b), [].into())),
+        });
+    }
+
+    fn add(
+        &mut self,
+        Assignment {
+            to,
+            mut args,
+            mut op,
+        }: Assignment,
+    ) {
+        for arg in &mut args {
+            *arg = self.renames.remove(arg).unwrap_or(*arg);
+        }
+
+        match op {
+            Op::Then(ref mut body) => {
+                let (&condition_value, args) = args.split_last().unwrap();
+                if let Some(Op::Ins((Instruction::PushBool(condition), _))) =
+                    self.graph.source_op(condition_value)
+                {
+                    let condition = *condition;
+                    self.drop(condition_value);
+                    if condition {
+                        self.renames.extend(
+                            body.inputs
+                                .iter()
+                                .copied()
+                                .zip(args.iter().copied()),
+                        );
+                        for assignment in mem::take(&mut body.assignments) {
+                            self.add(assignment);
+                        }
+                        self.renames.extend(
+                            to.iter().zip(body.outputs.iter().copied()),
+                        );
+                    } else {
+                        self.renames
+                            .extend(to.iter().zip(args.iter().copied()));
+                    }
+                    return;
+                }
+            }
+            Op::ThenElse(ref mut then, ref mut else_) => {
+                let (&condition_value, args) = args.split_last().unwrap();
+                if let Some(Op::Ins((Instruction::PushBool(condition), _))) =
+                    self.graph.source_op(condition_value)
+                {
+                    let body = if *condition { then } else { else_ };
+                    self.drop(condition_value);
+                    self.renames.extend(
+                        body.inputs.iter().copied().zip(args.iter().copied()),
+                    );
+                    for assignment in mem::take(&mut body.assignments) {
+                        self.add(assignment);
+                    }
+                    self.renames
+                        .extend(to.iter().zip(body.outputs.iter().copied()));
+                    return;
+                }
+            }
+            Op::Dup => {
+                if let Some(source) = self
+                    .graph
+                    .source_op(args[0])
+                    .filter(|op| op.trivially_dupable())
+                {
+                    self.renames.insert(to + 0, args[0]);
+                    self.add(Assignment {
+                        to: (to + 1).into(),
+                        args: Vec::new(),
+                        op: source.clone(),
+                    });
+                    todo!()
+                }
+            }
+            Op::Ins((Instruction::BinMathOp(op), _)) => {
+                let a = self.graph.source_op(args[0]);
+                let b = self.graph.source_op(args[1]);
+                if let (
+                    Some(Op::Ins((Instruction::PushI32(a), _))),
+                    Some(Op::Ins((Instruction::PushI32(b), _))),
+                ) = (a, b)
+                {
+                    if let Some(res) = match op {
+                        BinMathOp::Add => a.checked_add(*b),
+                        BinMathOp::Sub => a.checked_sub(*b),
+                        BinMathOp::Mul => a.checked_mul(*b),
+                        BinMathOp::Div => a.checked_div(*b),
+                        BinMathOp::Rem => a.checked_rem(*b),
+                        BinMathOp::SillyAdd => match (*a, *b) {
+                            (9, 10) | (10, 9) => Some(21),
+                            (1, 1) => Some(1),
+                            _ => a.checked_add(*b),
+                        },
+                    } {
+                        self.drop(args[0]);
+                        self.drop(args[1]);
+                        self.i32(to + 0, res);
+                        return;
+                    }
+                } else if let (
+                    Some(Op::Ins((Instruction::PushF32(a), _))),
+                    Some(Op::Ins((Instruction::PushF32(b), _))),
+                ) = (a, b)
+                {
+                    let res = match op {
+                        BinMathOp::Add => *a + *b,
+                        BinMathOp::Sub => *a - *b,
+                        BinMathOp::Mul => *a * *b,
+                        BinMathOp::Div => *a / *b,
+                        BinMathOp::Rem | BinMathOp::SillyAdd => {
+                            unreachable!()
+                        }
+                    };
+                    self.drop(args[0]);
+                    self.drop(args[1]);
+                    self.add(Assignment {
+                        to,
+                        args: Vec::new(),
+                        op: Op::Ins((Instruction::PushF32(res), [].into())),
+                    });
+                    return;
+                }
+            }
+            Op::Ins((Instruction::Comparison(op), _)) => {
+                let a = self.graph.source_op(args[0]);
+                let b = self.graph.source_op(args[1]);
+                if let (
+                    Some(Op::Ins((Instruction::PushI32(a), _))),
+                    Some(Op::Ins((Instruction::PushI32(b), _))),
+                ) = (a, b)
+                {
+                    let res = match op {
+                        Comparison::Lt => *a < *b,
+                        Comparison::Le => *a <= *b,
+                        Comparison::Eq => *a == *b,
+                        Comparison::Ge => *a >= *b,
+                        Comparison::Gt => *a > *b,
+                    };
+                    self.drop(args[0]);
+                    self.drop(args[1]);
+                    self.bool(to + 0, res);
+                    return;
+                }
+            }
+            Op::Ins((Instruction::Sqrt, _)) => {
+                if let Some(Op::Ins((Instruction::PushF32(num), _))) =
+                    self.graph.source_op(args[0])
+                {
+                    let num = *num;
+                    self.drop(args[0]);
+                    self.f32(to + 0, num.sqrt());
+                    return;
+                }
+            }
+            _ => {}
+        }
         self.graph.assignments.push(Assignment { to, args, op });
     }
 }
