@@ -581,7 +581,7 @@ pub fn propagate_drops(graph: &mut Graph) {
     out.reverse();
 
     // Remove drops for values created by useless operations.
-    let mut produced = HashSet::new();
+    let mut produced = graph.inputs.iter().copied().collect::<HashSet<_>>();
     out.retain(|assignment| {
         produced.extend(&assignment.to);
         assignment.args.iter().all(|arg| produced.contains(arg))
