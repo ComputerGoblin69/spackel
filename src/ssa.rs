@@ -1,9 +1,13 @@
 use crate::{
     ir::{BinMathOp, Comparison, Instruction},
-    typ::{FunctionSignature, Generics},
+    typ::{FunctionSignature, Generics, Type},
 };
 use itertools::Itertools;
-use std::{collections::HashMap, fmt, mem, ops::Range};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt, mem,
+    ops::Range,
+};
 
 type GInstruction = (Instruction<Generics>, Generics);
 
@@ -184,6 +188,28 @@ impl Op {
                     | Instruction::PushBool(_),
                 _
             ))
+        )
+    }
+
+    const fn pure(&self) -> bool {
+        // Most operations are pure, so it's more convenient to list the
+        // *impure* ones.
+        !matches!(
+            self,
+            Self::Then(_)
+                | Self::ThenElse(..)
+                | Self::Repeat(_)
+                | Self::Ins((
+                    Instruction::Call(_)
+                        | Instruction::PrintChar
+                        | Instruction::Print
+                        | Instruction::Println,
+                    _
+                ))
+        ) && !matches!(
+            self,
+            // Division by zero and maybe overflow?
+            Self::Ins((Instruction::BinMathOp(_), generics)) if matches!(generics[0], Type::I32)
         )
     }
 }
@@ -514,4 +540,52 @@ impl GraphBuilder<'_> {
         }
         self.graph.assignments.push(Assignment { to, args, op });
     }
+}
+
+pub fn propagate_drops(graph: &mut Graph) {
+    // Recurse.
+    for assignment in &mut graph.assignments {
+        match &mut assignment.op {
+            Op::Then(body) | Op::Repeat(body) => propagate_drops(body),
+            Op::ThenElse(then, else_) => {
+                propagate_drops(then);
+                propagate_drops(else_);
+            }
+            _ => {}
+        }
+    }
+
+    let mut useless_values = HashSet::new();
+    let mut out = Vec::new();
+    for assignment in mem::take(&mut graph.assignments).into_iter().rev() {
+        if assignment.op.pure()
+            && assignment
+                .to
+                .iter()
+                .all(|res| useless_values.contains(&res))
+        {
+            // If the values produced by a pure operation are all useless then the
+            // arguments are also useless.
+            useless_values.extend(assignment.args.iter().copied());
+            // The operation is pure and useless, so remove it and just drop
+            // its arguments.
+            out.extend(assignment.args.iter().map(|&arg| Assignment {
+                to: ValueSequence::default(),
+                args: vec![arg],
+                op: Op::Drop,
+            }));
+        } else {
+            out.push(assignment);
+        }
+    }
+    out.reverse();
+
+    // Remove drops for values created by useless operations.
+    let mut produced = HashSet::new();
+    out.retain(|assignment| {
+        produced.extend(&assignment.to);
+        assignment.args.iter().all(|arg| produced.contains(arg))
+    });
+
+    graph.assignments = out;
 }

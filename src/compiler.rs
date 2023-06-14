@@ -168,6 +168,7 @@ impl Compiler<'_> {
             &self.function_signatures,
             &mut self.value_generator,
         );
+        ssa::propagate_drops(&mut graph);
         if std::env::var_os("SPACKEL_PRINT_SSA").is_some() {
             eprintln!("{name}: {graph:#?}");
         }
