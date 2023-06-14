@@ -427,7 +427,7 @@ impl GraphBuilder<'_> {
                         args: Vec::new(),
                         op: source.clone(),
                     });
-                    todo!()
+                    return;
                 }
             }
             Op::Ins((Instruction::BinMathOp(op), _)) => {
