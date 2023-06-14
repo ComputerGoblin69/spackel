@@ -1,6 +1,5 @@
 use crate::{
     ir::{BinLogicOp, BinMathOp, Comparison, Instruction},
-    stack::Stack,
     typ::{Generics, Type},
 };
 
@@ -25,14 +24,12 @@ struct Interpreter<'a> {
     stack: Vec<Value>,
 }
 
-impl Stack for Interpreter<'_> {
-    type Item = Value;
-
-    fn push(&mut self, element: Self::Item) {
+impl Interpreter<'_> {
+    fn push(&mut self, element: Value) {
         self.stack.push(element);
     }
 
-    fn pop(&mut self) -> Self::Item {
+    fn pop(&mut self) -> Value {
         self.stack.pop().unwrap()
     }
 }
@@ -189,11 +186,36 @@ impl Interpreter<'_> {
             Instruction::Drop => {
                 self.pop();
             }
-            Instruction::Dup => self.dup(),
-            Instruction::Swap => self.swap(),
-            Instruction::Over => self.over(),
-            Instruction::Nip => self.nip(),
-            Instruction::Tuck => self.tuck(),
+            Instruction::Dup => {
+                let v = self.pop();
+                self.push(v.clone());
+                self.push(v);
+            }
+            Instruction::Swap => {
+                let b = self.pop();
+                let a = self.pop();
+                self.push(b);
+                self.push(a);
+            }
+            Instruction::Over => {
+                let b = self.pop();
+                let a = self.pop();
+                self.push(a.clone());
+                self.push(b);
+                self.push(a);
+            }
+            Instruction::Nip => {
+                let b = self.pop();
+                self.pop();
+                self.push(b);
+            }
+            Instruction::Tuck => {
+                let b = self.pop();
+                let a = self.pop();
+                self.push(b.clone());
+                self.push(a);
+                self.push(b);
+            }
         }
     }
 }

@@ -6,8 +6,7 @@ mod diagnostics;
 mod interpreter;
 mod ir;
 mod lexer;
-mod peephole;
-mod stack;
+mod ssa;
 mod typ;
 
 use anyhow::{bail, ensure, Context, Result};
@@ -51,8 +50,7 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
     let file = code_map.add_file(source_path, source_code);
 
     let program = ir::Program::parse(&file)?;
-    let mut program = typ::check(program)?;
-    peephole::optimize(&mut program);
+    let program = typ::check(program)?;
 
     match command {
         Command::Run => {
@@ -64,7 +62,7 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
                 target_triple: "x86_64-unknown-linux-gnu",
                 out_path: Path::new("main.o"),
             };
-            compiler::compile(&program, &compilation_options)
+            compiler::compile(program, &compilation_options)
         }
     }
 }

@@ -10,7 +10,7 @@ use std::{
     fmt::{self, Write as _},
 };
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Type {
     Bool,
     I32,
