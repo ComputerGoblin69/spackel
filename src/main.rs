@@ -58,8 +58,11 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
             Ok(())
         }
         Command::Compile => {
+            let target_triple = std::env::var("SPACKEL_TARGET");
             let compilation_options = compiler::Options {
-                target_triple: "x86_64-unknown-linux-gnu",
+                target_triple: target_triple
+                    .as_deref()
+                    .unwrap_or("x86_64-unknown-linux-gnu"),
                 out_path: Path::new("main.o"),
             };
             compiler::compile(program, &compilation_options)
