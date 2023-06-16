@@ -247,7 +247,12 @@ impl Compiler<'_> {
             Op::Ins((Instruction::PushBool(b), _)) => {
                 self.set(to + 0, fb.ins().iconst(I8, i64::from(b)));
             }
-            Op::Ins((Instruction::PushType(_) | Instruction::TypeOf, _)) => {
+            Op::Ins((
+                Instruction::PushType(_)
+                | Instruction::Ptr
+                | Instruction::TypeOf,
+                _,
+            )) => {
                 todo!();
             }
             Op::Ins((Instruction::Print, generics)) => {

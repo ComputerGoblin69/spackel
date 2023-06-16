@@ -278,6 +278,7 @@ impl Checker {
             Instruction::PushF32(_) => (&[], &[], &[C(F32)]),
             Instruction::PushBool(_) => (&[], &[], &[C(Bool)]),
             Instruction::PushType(_) => (&[], &[], &[C(Type::Type)]),
+            Instruction::Ptr => (&[], &[C(Type::Type)], &[C(Type::Type)]),
             Instruction::TypeOf => {
                 (&[any('T', Any)], &[G(0)], &[C(Type::Type)])
             }
@@ -414,6 +415,7 @@ impl Checker {
             Instruction::PushF32(n) => Instruction::PushF32(n),
             Instruction::PushBool(b) => Instruction::PushBool(b),
             Instruction::PushType(typ) => Instruction::PushType(typ),
+            Instruction::Ptr => Instruction::Ptr,
             Instruction::TypeOf => Instruction::TypeOf,
             Instruction::Print => Instruction::Print,
             Instruction::Println => Instruction::Println,

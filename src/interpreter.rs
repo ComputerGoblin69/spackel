@@ -62,6 +62,13 @@ impl Interpreter<'_> {
         }
     }
 
+    fn pop_type(&mut self) -> Type {
+        match self.pop() {
+            Value::Type(typ) => typ,
+            _ => unreachable!(),
+        }
+    }
+
     fn interpret_instruction(
         &mut self,
         (instruction, generics): &(Instruction<Generics>, Generics),
@@ -103,6 +110,10 @@ impl Interpreter<'_> {
             Instruction::PushF32(number) => self.push(Value::F32(*number)),
             Instruction::PushBool(b) => self.push(Value::Bool(*b)),
             Instruction::PushType(typ) => self.push(Value::Type(typ.clone())),
+            Instruction::Ptr => {
+                let inner = self.pop_type();
+                self.push(Value::Type(Type::Ptr(Box::new(inner))));
+            }
             Instruction::TypeOf => {
                 self.pop();
                 self.push(Value::Type(generics[0].clone()));

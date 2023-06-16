@@ -42,7 +42,7 @@
 
 (
  (word) @type.builtin
- (#match? @type.builtin "^(i32|bool|type)$")
+ (#match? @type.builtin "^(i32|bool|type|ptr)$")
 )
 
 (word) @variable

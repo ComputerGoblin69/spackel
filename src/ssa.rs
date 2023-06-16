@@ -296,6 +296,7 @@ impl GraphBuilder<'_> {
             Instruction::TypeOf
             | Instruction::Sqrt
             | Instruction::Not
+            | Instruction::Ptr
             | Instruction::AddrOf
             | Instruction::ReadPtr => (1, 1, Op::Ins(instruction)),
             Instruction::BinMathOp(_)
