@@ -158,7 +158,7 @@ impl Graph {
 #[derive(Clone)]
 pub struct Assignment {
     pub to: ValueSequence,
-    pub args: Vec<Value>,
+    pub args: Box<[Value]>,
     pub op: Op,
 }
 
@@ -347,7 +347,9 @@ impl GraphBuilder<'_> {
         let to = self
             .value_generator
             .new_value_sequence(to_count.try_into().unwrap());
-        let args = self.stack.split_off(self.stack.len() - arg_count);
+        let remaining_len = self.stack.len() - arg_count;
+        let args = self.stack[remaining_len..].into();
+        self.stack.truncate(remaining_len);
         self.stack.extend(&to);
         self.add(Assignment { to, args, op });
     }
@@ -355,7 +357,7 @@ impl GraphBuilder<'_> {
     fn drop(&mut self, value: Value) {
         self.add(Assignment {
             to: ValueSequence::default(),
-            args: vec![value],
+            args: [value].into(),
             op: Op::Drop,
         });
     }
@@ -363,7 +365,7 @@ impl GraphBuilder<'_> {
     fn i32(&mut self, to: Value, n: i32) {
         self.add(Assignment {
             to: to.into(),
-            args: Vec::new(),
+            args: [].into(),
             op: Op::Ins((Instruction::PushI32(n), [].into())),
         });
     }
@@ -371,7 +373,7 @@ impl GraphBuilder<'_> {
     fn f32(&mut self, to: Value, n: f32) {
         self.add(Assignment {
             to: to.into(),
-            args: Vec::new(),
+            args: [].into(),
             op: Op::Ins((Instruction::PushF32(n), [].into())),
         });
     }
@@ -379,7 +381,7 @@ impl GraphBuilder<'_> {
     fn bool(&mut self, to: Value, b: bool) {
         self.add(Assignment {
             to: to.into(),
-            args: Vec::new(),
+            args: [].into(),
             op: Op::Ins((Instruction::PushBool(b), [].into())),
         });
     }
@@ -392,7 +394,7 @@ impl GraphBuilder<'_> {
             mut op,
         }: Assignment,
     ) {
-        for arg in &mut args {
+        for arg in &mut *args {
             *arg = self.renames.remove(arg).unwrap_or(*arg);
         }
 
@@ -451,7 +453,7 @@ impl GraphBuilder<'_> {
                     self.renames.insert(to + 0, args[0]);
                     self.add(Assignment {
                         to: (to + 1).into(),
-                        args: Vec::new(),
+                        args: [].into(),
                         op: source.clone(),
                     });
                     return;
@@ -500,7 +502,7 @@ impl GraphBuilder<'_> {
                     self.drop(args[1]);
                     self.add(Assignment {
                         to,
-                        args: Vec::new(),
+                        args: [].into(),
                         op: Op::Ins((Instruction::PushF32(res), [].into())),
                     });
                     return;
@@ -572,7 +574,7 @@ pub fn propagate_drops(graph: &mut Graph) {
             // its arguments.
             out.extend(assignment.args.iter().map(|&arg| Assignment {
                 to: ValueSequence::default(),
-                args: vec![arg],
+                args: [arg].into(),
                 op: Op::Drop,
             }));
         } else {
