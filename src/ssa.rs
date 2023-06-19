@@ -493,11 +493,17 @@ impl GraphBuilder<'_> {
                     .source_op(args[0])
                     .filter(|op| op.trivially_dupable())
                 {
-                    self.renames.insert(to + 0, args[0]);
+                    let source = source.clone();
+                    self.drop(args[0]);
+                    self.add(Assignment {
+                        to: (to + 0).into(),
+                        args: [].into(),
+                        op: source.clone(),
+                    });
                     self.add(Assignment {
                         to: (to + 1).into(),
                         args: [].into(),
-                        op: source.clone(),
+                        op: source,
                     });
                     return;
                 }
