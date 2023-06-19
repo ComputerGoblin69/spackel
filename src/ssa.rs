@@ -1,5 +1,5 @@
 use crate::{
-    ir::{BinMathOp, Comparison, Instruction},
+    ir::{BinLogicOp, BinMathOp, Comparison, Instruction},
     typ::{FunctionSignature, Generics, Type},
 };
 use itertools::Itertools;
@@ -170,25 +170,38 @@ impl fmt::Debug for Assignment {
 
 #[derive(Clone, Debug)]
 pub enum Op {
-    Ins(GInstruction),
     Dup,
     Drop,
     Then(Box<Graph>),
     ThenElse(Box<Graph>, Box<Graph>),
     Repeat(Box<Graph>),
+    Call(Box<str>),
+    I32(i32),
+    F32(f32),
+    Bool(bool),
+    Type(Type),
+    PrintChar,
+    PrintI32,
+    PrintF32,
+    PrintlnI32,
+    PrintlnF32,
+    Sqrt,
+    TypeOf,
+    Ptr,
+    Not,
+    BinMath {
+        operation: BinMathOp,
+        typ: Option<Type>,
+    },
+    BinLogic(BinLogicOp),
+    Compare(Comparison),
+    AddrOf(Type),
+    ReadPtr(Type),
 }
 
 impl Op {
     const fn trivially_dupable(&self) -> bool {
-        matches!(
-            self,
-            Self::Ins((
-                Instruction::PushI32(_)
-                    | Instruction::PushF32(_)
-                    | Instruction::PushBool(_),
-                _
-            ))
-        )
+        matches!(self, Self::I32(_) | Self::F32(_) | Self::Bool(_))
     }
 
     const fn pure(&self) -> bool {
@@ -199,17 +212,14 @@ impl Op {
             Self::Then(_)
                 | Self::ThenElse(..)
                 | Self::Repeat(_)
-                | Self::Ins((
-                    Instruction::Call(_)
-                        | Instruction::PrintChar
-                        | Instruction::Print
-                        | Instruction::Println,
-                    _
-                ))
-        ) && !matches!(
-            self,
-            // Division by zero and maybe overflow?
-            Self::Ins((Instruction::BinMathOp(_), generics)) if matches!(generics[0], Type::I32)
+                | Self::Call(_)
+                | Self::PrintChar
+                | Self::PrintI32
+                | Self::PrintF32
+                | Self::PrintlnI32
+                | Self::PrintlnF32
+                // Division by zero and maybe overflow?
+                | Self::BinMath { typ: Some(Type::I32), .. }
         )
     }
 }
@@ -223,14 +233,14 @@ struct GraphBuilder<'g> {
 }
 
 impl GraphBuilder<'_> {
-    fn add_instruction(&mut self, instruction: GInstruction) {
-        let (to_count, arg_count, op) = match instruction.0 {
-            Instruction::Call(ref name) => {
-                let signature = &self.function_signatures[&**name];
+    fn add_instruction(&mut self, (instruction, generics): GInstruction) {
+        let (to_count, arg_count, op) = match instruction {
+            Instruction::Call(name) => {
+                let signature = &self.function_signatures[&*name];
                 (
                     signature.returns.len(),
                     signature.parameters.len(),
-                    Op::Ins(instruction),
+                    Op::Call(name),
                 )
             }
             Instruction::Then(body) => {
@@ -286,22 +296,55 @@ impl GraphBuilder<'_> {
             }
             Instruction::Dup => (2, 1, Op::Dup),
             Instruction::Drop => (0, 1, Op::Drop),
-            Instruction::PushI32(_)
-            | Instruction::PushF32(_)
-            | Instruction::PushBool(_)
-            | Instruction::PushType(_) => (1, 0, Op::Ins(instruction)),
-            Instruction::Print
-            | Instruction::Println
-            | Instruction::PrintChar => (0, 1, Op::Ins(instruction)),
-            Instruction::TypeOf
-            | Instruction::Sqrt
-            | Instruction::Not
-            | Instruction::Ptr
-            | Instruction::AddrOf
-            | Instruction::ReadPtr => (1, 1, Op::Ins(instruction)),
-            Instruction::BinMathOp(_)
-            | Instruction::Comparison(_)
-            | Instruction::BinLogicOp(_) => (1, 2, Op::Ins(instruction)),
+            Instruction::PushI32(n) => (1, 0, Op::I32(n)),
+            Instruction::PushF32(n) => (1, 0, Op::F32(n)),
+            Instruction::PushBool(b) => (1, 0, Op::Bool(b)),
+            Instruction::PushType(typ) => (1, 0, Op::Type(typ)),
+            Instruction::PrintChar => (0, 1, Op::PrintChar),
+            Instruction::Print => (
+                0,
+                1,
+                match generics[0] {
+                    Type::I32 => Op::PrintI32,
+                    Type::F32 => Op::PrintF32,
+                    _ => unreachable!(),
+                },
+            ),
+            Instruction::Println => (
+                0,
+                1,
+                match generics[0] {
+                    Type::I32 => Op::PrintlnI32,
+                    Type::F32 => Op::PrintlnF32,
+                    _ => unreachable!(),
+                },
+            ),
+            Instruction::Not => (1, 1, Op::Not),
+            Instruction::Sqrt => (1, 1, Op::Sqrt),
+            Instruction::TypeOf => (1, 1, Op::TypeOf),
+            Instruction::Ptr => (1, 1, Op::Ptr),
+            Instruction::AddrOf => (
+                1,
+                1,
+                Op::AddrOf(generics.into_vec().into_iter().next().unwrap()),
+            ),
+            Instruction::ReadPtr => (
+                1,
+                1,
+                Op::ReadPtr(generics.into_vec().into_iter().next().unwrap()),
+            ),
+            Instruction::BinMathOp(operation) => (
+                1,
+                2,
+                Op::BinMath {
+                    operation,
+                    typ: generics.into_vec().into_iter().next(),
+                },
+            ),
+            Instruction::Comparison(comparison) => {
+                (1, 2, Op::Compare(comparison))
+            }
+            Instruction::BinLogicOp(op) => (1, 2, Op::BinLogic(op)),
             Instruction::Swap => {
                 let a = self.stack.len() - 2;
                 let b = self.stack.len() - 1;
@@ -309,8 +352,8 @@ impl GraphBuilder<'_> {
                 return;
             }
             Instruction::Nip => {
-                let dropped_type = instruction.1[0].clone();
-                self.add_instruction((Instruction::Swap, instruction.1));
+                let dropped_type = generics[0].clone();
+                self.add_instruction((Instruction::Swap, generics));
                 self.add_instruction((
                     Instruction::Drop,
                     Box::new([dropped_type]),
@@ -323,7 +366,7 @@ impl GraphBuilder<'_> {
                 self.stack.swap(a, b);
                 self.add_instruction((
                     Instruction::Dup,
-                    Box::new([instruction.1[0].clone()]),
+                    Box::new([generics.into_vec().into_iter().next().unwrap()]),
                 ));
                 let a = self.stack.len() - 3;
                 let b = self.stack.len() - 2;
@@ -333,7 +376,7 @@ impl GraphBuilder<'_> {
             Instruction::Tuck => {
                 self.add_instruction((
                     Instruction::Dup,
-                    Box::new([instruction.1[1].clone()]),
+                    Box::new([generics.into_vec().into_iter().nth(1).unwrap()]),
                 ));
                 let a = self.stack.len() - 2;
                 let new_a = self.stack.len() - 1;
@@ -366,7 +409,7 @@ impl GraphBuilder<'_> {
         self.add(Assignment {
             to: to.into(),
             args: [].into(),
-            op: Op::Ins((Instruction::PushI32(n), [].into())),
+            op: Op::I32(n),
         });
     }
 
@@ -374,7 +417,7 @@ impl GraphBuilder<'_> {
         self.add(Assignment {
             to: to.into(),
             args: [].into(),
-            op: Op::Ins((Instruction::PushF32(n), [].into())),
+            op: Op::F32(n),
         });
     }
 
@@ -382,7 +425,7 @@ impl GraphBuilder<'_> {
         self.add(Assignment {
             to: to.into(),
             args: [].into(),
-            op: Op::Ins((Instruction::PushBool(b), [].into())),
+            op: Op::Bool(b),
         });
     }
 
@@ -401,7 +444,7 @@ impl GraphBuilder<'_> {
         match op {
             Op::Then(ref mut body) => {
                 let (&condition_value, args) = args.split_last().unwrap();
-                if let Some(Op::Ins((Instruction::PushBool(condition), _))) =
+                if let Some(Op::Bool(condition)) =
                     self.graph.source_op(condition_value)
                 {
                     let condition = *condition;
@@ -428,7 +471,7 @@ impl GraphBuilder<'_> {
             }
             Op::ThenElse(ref mut then, ref mut else_) => {
                 let (&condition_value, args) = args.split_last().unwrap();
-                if let Some(Op::Ins((Instruction::PushBool(condition), _))) =
+                if let Some(Op::Bool(condition)) =
                     self.graph.source_op(condition_value)
                 {
                     let body = if *condition { then } else { else_ };
@@ -459,15 +502,11 @@ impl GraphBuilder<'_> {
                     return;
                 }
             }
-            Op::Ins((Instruction::BinMathOp(op), _)) => {
+            Op::BinMath { operation, .. } => {
                 let a = self.graph.source_op(args[0]);
                 let b = self.graph.source_op(args[1]);
-                if let (
-                    Some(Op::Ins((Instruction::PushI32(a), _))),
-                    Some(Op::Ins((Instruction::PushI32(b), _))),
-                ) = (a, b)
-                {
-                    if let Some(res) = match op {
+                if let (Some(Op::I32(a)), Some(Op::I32(b))) = (a, b) {
+                    if let Some(res) = match operation {
                         BinMathOp::Add => a.checked_add(*b),
                         BinMathOp::Sub => a.checked_sub(*b),
                         BinMathOp::Mul => a.checked_mul(*b),
@@ -484,39 +523,29 @@ impl GraphBuilder<'_> {
                         self.i32(to + 0, res);
                         return;
                     }
-                } else if let (
-                    Some(Op::Ins((Instruction::PushF32(a), _))),
-                    Some(Op::Ins((Instruction::PushF32(b), _))),
-                ) = (a, b)
-                {
-                    let res = match op {
+                } else if let (Some(Op::F32(a)), Some(Op::F32(b))) = (a, b) {
+                    let res = match operation {
                         BinMathOp::Add => *a + *b,
                         BinMathOp::Sub => *a - *b,
                         BinMathOp::Mul => *a * *b,
                         BinMathOp::Div => *a / *b,
-                        BinMathOp::Rem | BinMathOp::SillyAdd => {
-                            unreachable!()
-                        }
+                        _ => unreachable!(),
                     };
                     self.drop(args[0]);
                     self.drop(args[1]);
                     self.add(Assignment {
                         to,
                         args: [].into(),
-                        op: Op::Ins((Instruction::PushF32(res), [].into())),
+                        op: Op::F32(res),
                     });
                     return;
                 }
             }
-            Op::Ins((Instruction::Comparison(op), _)) => {
+            Op::Compare(comparison) => {
                 let a = self.graph.source_op(args[0]);
                 let b = self.graph.source_op(args[1]);
-                if let (
-                    Some(Op::Ins((Instruction::PushI32(a), _))),
-                    Some(Op::Ins((Instruction::PushI32(b), _))),
-                ) = (a, b)
-                {
-                    let res = match op {
+                if let (Some(Op::I32(a)), Some(Op::I32(b))) = (a, b) {
+                    let res = match comparison {
                         Comparison::Lt => *a < *b,
                         Comparison::Le => *a <= *b,
                         Comparison::Eq => *a == *b,
@@ -529,10 +558,8 @@ impl GraphBuilder<'_> {
                     return;
                 }
             }
-            Op::Ins((Instruction::Sqrt, _)) => {
-                if let Some(Op::Ins((Instruction::PushF32(num), _))) =
-                    self.graph.source_op(args[0])
-                {
+            Op::Sqrt => {
+                if let Some(Op::F32(num)) = self.graph.source_op(args[0]) {
                     let num = *num;
                     self.drop(args[0]);
                     self.f32(to + 0, num.sqrt());

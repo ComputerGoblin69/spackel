@@ -1,5 +1,5 @@
 use crate::{
-    ir::{BinLogicOp, BinMathOp, Comparison, Instruction},
+    ir::{BinLogicOp, BinMathOp, Comparison},
     ssa::{self, Op},
     typ::{FunctionSignature, Type},
 };
@@ -213,7 +213,7 @@ impl Compiler<'_> {
         fb: &mut FunctionBuilder,
     ) {
         match op {
-            Op::Ins((Instruction::Call(name), _)) => {
+            Op::Call(name) => {
                 let func_id = self.function_ids[&*name];
                 let func_ref =
                     self.object_module.declare_func_in_func(func_id, fb.func);
@@ -238,83 +238,77 @@ impl Compiler<'_> {
             Op::Drop => {
                 self.take(args[0]);
             }
-            Op::Ins((Instruction::PushI32(number), _)) => {
+            Op::I32(number) => {
                 self.set(to + 0, fb.ins().iconst(I32, i64::from(number)));
             }
-            Op::Ins((Instruction::PushF32(number), _)) => {
+            Op::F32(number) => {
                 self.set(to + 0, fb.ins().f32const(number));
             }
-            Op::Ins((Instruction::PushBool(b), _)) => {
+            Op::Bool(b) => {
                 self.set(to + 0, fb.ins().iconst(I8, i64::from(b)));
             }
-            Op::Ins((
-                Instruction::PushType(_)
-                | Instruction::Ptr
-                | Instruction::TypeOf,
-                _,
-            )) => {
-                todo!();
-            }
-            Op::Ins((Instruction::Print, generics)) => {
-                let n = self.take(args[0]);
-                self.call_extern(
-                    if generics[0] == Type::F32 {
-                        "spkl_print_f32"
-                    } else {
-                        "spkl_print_i32"
-                    },
-                    &[n],
-                    fb,
-                );
-            }
-            Op::Ins((Instruction::Println, generics)) => {
-                let n = self.take(args[0]);
-                self.call_extern(
-                    if generics[0] == Type::F32 {
-                        "spkl_println_f32"
-                    } else {
-                        "spkl_println_i32"
-                    },
-                    &[n],
-                    fb,
-                );
-            }
-            Op::Ins((Instruction::PrintChar, _)) => {
+            Op::Type(_) | Op::TypeOf | Op::Ptr => todo!(),
+            Op::PrintChar => {
                 let n = self.take(args[0]);
                 self.call_extern("spkl_print_char", &[n], fb);
             }
-            Op::Ins((Instruction::BinMathOp(op), generics)) => {
+            Op::PrintI32 => {
+                let n = self.take(args[0]);
+                self.call_extern("spkl_print_i32", &[n], fb);
+            }
+            Op::PrintF32 => {
+                let n = self.take(args[0]);
+                self.call_extern("spkl_print_f32", &[n], fb);
+            }
+            Op::PrintlnI32 => {
+                let n = self.take(args[0]);
+                self.call_extern("spkl_println_i32", &[n], fb);
+            }
+            Op::PrintlnF32 => {
+                let n = self.take(args[0]);
+                self.call_extern("spkl_println_f32", &[n], fb);
+            }
+            Op::BinMath { operation, typ } => {
                 let a = self.take(args[0]);
                 let b = self.take(args[1]);
                 self.set(
                     to + 0,
-                    match (generics.first(), op) {
-                        (Some(Type::F32), BinMathOp::Add) => {
+                    match (operation, typ) {
+                        (BinMathOp::Add, Some(Type::I32)) => {
+                            fb.ins().iadd(a, b)
+                        }
+                        (BinMathOp::Sub, Some(Type::I32)) => {
+                            fb.ins().isub(a, b)
+                        }
+                        (BinMathOp::Mul, Some(Type::I32)) => {
+                            fb.ins().imul(a, b)
+                        }
+                        (BinMathOp::Div, Some(Type::I32)) => {
+                            fb.ins().sdiv(a, b)
+                        }
+                        (BinMathOp::Rem, _) => fb.ins().srem(a, b),
+                        (BinMathOp::SillyAdd, _) => todo!(),
+                        (BinMathOp::Add, Some(Type::F32)) => {
                             fb.ins().fadd(a, b)
                         }
-                        (Some(Type::F32), BinMathOp::Sub) => {
+                        (BinMathOp::Sub, Some(Type::F32)) => {
                             fb.ins().fsub(a, b)
                         }
-                        (Some(Type::F32), BinMathOp::Mul) => {
+                        (BinMathOp::Mul, Some(Type::F32)) => {
                             fb.ins().fmul(a, b)
                         }
-                        (Some(Type::F32), BinMathOp::Div) => {
+                        (BinMathOp::Div, Some(Type::F32)) => {
                             fb.ins().fdiv(a, b)
                         }
-                        (_, BinMathOp::Add) => fb.ins().iadd(a, b),
-                        (_, BinMathOp::Sub) => fb.ins().isub(a, b),
-                        (_, BinMathOp::Mul) => fb.ins().imul(a, b),
-                        (_, BinMathOp::Div) => fb.ins().sdiv(a, b),
-                        (_, BinMathOp::Rem) => fb.ins().srem(a, b),
-                        (_, BinMathOp::SillyAdd) => todo!(),
+                        _ => unreachable!(),
                     },
                 );
             }
-            Op::Ins((Instruction::Sqrt, _)) => {
+            Op::Sqrt => {
                 let n = self.take(args[0]);
                 self.set(to + 0, fb.ins().sqrt(n));
             }
-            Op::Ins((Instruction::Comparison(comparison), _)) => {
+            Op::Compare(comparison) => {
                 let a = self.take(args[0]);
                 let b = self.take(args[1]);
                 self.set(
@@ -332,11 +326,11 @@ impl Compiler<'_> {
                     ),
                 );
             }
-            Op::Ins((Instruction::Not, _)) => {
+            Op::Not => {
                 let b = self.take(args[0]);
                 self.set(to + 0, fb.ins().bxor_imm(b, 1));
             }
-            Op::Ins((Instruction::BinLogicOp(op), _)) => {
+            Op::BinLogic(op) => {
                 let a = self.take(args[0]);
                 let b = self.take(args[1]);
                 self.set(
@@ -360,8 +354,8 @@ impl Compiler<'_> {
                     },
                 );
             }
-            Op::Ins((Instruction::AddrOf, generics)) => {
-                let typ = generics[0].to_clif(self.isa).unwrap();
+            Op::AddrOf(typ) => {
+                let typ = typ.to_clif(self.isa).unwrap();
                 let stack_slot = fb.create_sized_stack_slot(StackSlotData {
                     kind: StackSlotKind::ExplicitSlot,
                     size: typ.bytes(),
@@ -374,27 +368,14 @@ impl Compiler<'_> {
                     fb.ins().stack_addr(self.isa.pointer_type(), stack_slot, 0),
                 );
             }
-            Op::Ins((Instruction::ReadPtr, generics)) => {
+            Op::ReadPtr(typ) => {
                 let ptr = self.take(args[0]);
-                let typ = generics[0].to_clif(self.isa).unwrap();
+                let typ = typ.to_clif(self.isa).unwrap();
                 self.set(
                     to + 0,
                     fb.ins().load(typ, MemFlags::trusted(), ptr, 0),
                 );
             }
-            Op::Ins((
-                Instruction::Then(..)
-                | Instruction::ThenElse(..)
-                | Instruction::Repeat { .. }
-                | Instruction::Unsafe(..)
-                | Instruction::Dup
-                | Instruction::Drop
-                | Instruction::Swap
-                | Instruction::Nip
-                | Instruction::Tuck
-                | Instruction::Over,
-                _,
-            )) => unreachable!(),
         }
     }
 
