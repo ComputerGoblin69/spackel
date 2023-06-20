@@ -31,6 +31,12 @@ you, including ensuring that the runtime and the compiler itself are up to date:
 ./main
 ```
 
+### Cross-compilation
+
+Spackel targets `x86_64-unknown-linux-gnu` by default, but this can be changed
+through the `SPACKEL_TARGET` environment variable. You will however have to
+enable the relevant Cranelift features.
+
 ## Syntax
 
 - Source files must be encoded as UTF-8.
