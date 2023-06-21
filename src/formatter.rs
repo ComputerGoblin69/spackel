@@ -46,7 +46,10 @@ impl Formatter {
                 self.output.push(' ');
             }
         }
-        if matches!(token, "else" | "macro" | "do" | "then" | "unsafe") {
+        if matches!(
+            token,
+            "else" | "macro" | "do" | "then" | "repeat" | "unsafe"
+        ) {
             self.indentation += 1;
         }
         self.output.push_str(token);
