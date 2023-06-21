@@ -31,6 +31,10 @@ you, including ensuring that the runtime and the compiler itself are up to date:
 ./main
 ```
 
+Spackel files can be formatted with the `format` command. The result gets
+printed; it does not overwrite the file. If no file is provided, stdin is
+formatted instead.
+
 ### Cross-compilation
 
 Spackel targets `x86_64-unknown-linux-gnu` by default, but this can be changed
