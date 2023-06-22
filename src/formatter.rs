@@ -33,6 +33,9 @@ struct Formatter {
 
 impl Formatter {
     fn emit_token(&mut self, token: &str) {
+        if token == "\n" && self.output.ends_with("\n\n") {
+            return;
+        }
         if matches!(token, "end" | "else") {
             self.indentation = self.indentation.saturating_sub(1);
         }
