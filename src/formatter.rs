@@ -8,6 +8,9 @@ pub fn format(source_code: &str) -> String {
     for token in lex_including_trivia(source_code) {
         formatter.emit_token(token);
     }
+    if formatter.output.ends_with("\n\n") {
+        formatter.output.pop();
+    }
     formatter.output
 }
 
@@ -33,7 +36,9 @@ struct Formatter {
 
 impl Formatter {
     fn emit_token(&mut self, token: &str) {
-        if token == "\n" && self.output.ends_with("\n\n") {
+        if token == "\n"
+            && (self.output.is_empty() || self.output.ends_with("\n\n"))
+        {
             return;
         }
         if matches!(token, "end" | "else") {
