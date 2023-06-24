@@ -14,12 +14,6 @@ use anyhow::{bail, ensure, Context, Result};
 use codemap::CodeMap;
 use std::{path::Path, process::ExitCode};
 
-enum Command {
-    Run,
-    Compile,
-    Format,
-}
-
 fn main() -> Result<ExitCode> {
     let mut code_map = CodeMap::new();
 
@@ -40,17 +34,8 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
     ensure!(args.len() < 3, "too many command line arguments");
 
     let command = args.next().context("no command provided")?;
-    let command = match &*command {
-        "run" => Command::Run,
-        "compile" => Command::Compile,
-        "format" => Command::Format,
-        _ => bail!(
-            "command must be `run`, `compile` or `format`, not {command:?}"
-        ),
-    };
-
-    match command {
-        Command::Run => {
+    match &*command {
+        "run" => {
             let source_path = args.next().context("no file provided")?;
             let source_code = std::fs::read_to_string(&source_path)
                 .context("failed to read source file")?;
@@ -61,7 +46,7 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
             interpreter::interpret(&program);
             Ok(())
         }
-        Command::Compile => {
+        "compile" => {
             let source_path = args.next().context("no file provided")?;
             let source_code = std::fs::read_to_string(&source_path)
                 .context("failed to read source file")?;
@@ -78,7 +63,7 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
             };
             compiler::compile(program, &compilation_options)
         }
-        Command::Format => {
+        "format" => {
             let source_code = if let Some(source_path) = args.next() {
                 std::fs::read_to_string(source_path)
                     .context("failed to read source file")?
@@ -89,5 +74,8 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
             print!("{}", formatter::format(&source_code));
             Ok(())
         }
+        _ => bail!(
+            "command must be `run`, `compile` or `format`, not {command:?}"
+        ),
     }
 }
