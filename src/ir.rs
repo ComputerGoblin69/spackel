@@ -73,7 +73,7 @@ fn expand_macros<'a>(
                         ],
                     )
                     .into())),
-                    "then" | "repeat" => {
+                    "then" | "repeat" | "unsafe" => {
                         layers += 1;
                         Some(Ok(vec![token]))
                     }
