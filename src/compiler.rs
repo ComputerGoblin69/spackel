@@ -110,7 +110,9 @@ struct Compiler<'a> {
 
 impl Compiler<'_> {
     fn take(&mut self, value: ssa::Value) -> Value {
-        self.ssa_values.remove(&value).unwrap()
+        self.ssa_values
+            .remove(&value)
+            .unwrap_or_else(|| panic!("{value:?} is not defined"))
     }
 
     fn set(&mut self, value: ssa::Value, clif_value: Value) {
