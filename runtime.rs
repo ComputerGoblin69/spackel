@@ -1,18 +1,23 @@
 #![no_std]
 
 extern "C" {
-    fn write(fd: i32, buf: *const core::ffi::c_void, len: usize) -> i32;
+    fn fputs(
+        s: *const core::ffi::c_char,
+        stream: *mut core::ffi::c_void,
+    ) -> i32;
     fn printf(fmt: *const core::ffi::c_char, ...) -> i32;
+
+    static stdout: *mut core::ffi::c_void;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn spkl_print_char(n: u32) {
-    let mut buf = [0; 4];
-    let s = char::from_u32(n)
+    let mut buf = [0; 5];
+    char::from_u32(n)
         .unwrap_or(char::REPLACEMENT_CHARACTER)
         .encode_utf8(&mut buf);
     unsafe {
-        write(1, s.as_ptr().cast(), s.len());
+        fputs(buf.as_ptr().cast(), stdout);
     }
 }
 
