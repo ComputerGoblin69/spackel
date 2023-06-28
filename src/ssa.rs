@@ -142,7 +142,13 @@ impl Graph {
         for instruction in block.into_vec() {
             graph_builder.add_instruction(instruction);
         }
+        let mut renames = graph_builder.renames;
         graph.outputs = graph_builder.stack;
+        for out in &mut graph.outputs {
+            while let Some(renamed) = renames.remove(out) {
+                *out = renamed;
+            }
+        }
         graph
     }
 
@@ -461,6 +467,11 @@ impl GraphBuilder<'_> {
                         for assignment in mem::take(&mut body.assignments) {
                             self.add(assignment);
                         }
+                        for out in &mut body.outputs {
+                            while let Some(renamed) = self.renames.remove(out) {
+                                *out = renamed;
+                            }
+                        }
                         self.renames.extend(
                             to.iter().zip(body.outputs.iter().copied()),
                         );
@@ -483,6 +494,11 @@ impl GraphBuilder<'_> {
                     );
                     for assignment in mem::take(&mut body.assignments) {
                         self.add(assignment);
+                    }
+                    for out in &mut body.outputs {
+                        while let Some(renamed) = self.renames.remove(out) {
+                            *out = renamed;
+                        }
                     }
                     self.renames
                         .extend(to.iter().zip(body.outputs.iter().copied()));
