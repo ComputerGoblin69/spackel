@@ -465,8 +465,8 @@ impl Compiler<'_> {
         for assignment in then.assignments {
             self.compile_assignment(assignment, fb);
         }
-        for (value, &out) in std::iter::zip(&to, &then.outputs) {
-            let v = self.take(out);
+        for (value, out) in std::iter::zip(&to, &then.outputs) {
+            let v = self.ssa_values[out];
             self.set(
                 value,
                 fb.append_block_param(after_block, fb.func.dfg.value_type(v)),
