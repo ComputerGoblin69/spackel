@@ -1,0 +1,26 @@
+# Demonstrates the Collatz conjecture with the integers from 1 to 20.
+
+fn main : -> do
+  1
+  repeat
+    dup print
+    58 print-char # :
+    dup
+    repeat
+      32 print-char # space
+      dup print
+      dup 1 = not tuck then
+        dup 2 % 0 = then
+          2 /
+        else
+          3 * 1 +
+        end
+      end
+      swap
+    end
+    drop
+    10 print-char # \n
+    1 + dup 20 <=
+  end
+  drop
+end
