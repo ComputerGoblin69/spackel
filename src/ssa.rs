@@ -438,7 +438,9 @@ impl GraphBuilder<'_> {
         }: Assignment,
     ) {
         for arg in &mut *args {
-            *arg = self.renames.remove(arg).unwrap_or(*arg);
+            while let Some(renamed) = self.renames.remove(arg) {
+                *arg = renamed;
+            }
         }
 
         match op {
