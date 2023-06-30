@@ -14,19 +14,15 @@ pub fn format(source_code: &str) -> String {
     formatter.output
 }
 
-pub fn lex_including_trivia(source_code: &str) -> Vec<&str> {
-    let mut tokens = Vec::new();
-    for (line, comment) in source_code.lines().map(|line| {
-        line.find('#').map_or((line, None), |comment_index| {
-            let (line, comment) = line.split_at(comment_index);
-            (line, Some(comment))
-        })
-    }) {
-        tokens.extend(line.split_whitespace());
-        tokens.extend(comment);
-        tokens.push("\n");
-    }
-    tokens
+pub fn lex_including_trivia(source_code: &str) -> impl Iterator<Item = &str> {
+    source_code.lines().flat_map(|line| {
+        let (line, comment) =
+            line.find('#').map_or((line, None), |comment_index| {
+                let (line, comment) = line.split_at(comment_index);
+                (line, Some(comment))
+            });
+        line.split_whitespace().chain(comment).chain(["\n"])
+    })
 }
 
 struct Formatter {
