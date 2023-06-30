@@ -14,7 +14,7 @@ pub fn format(source_code: &str) -> String {
     formatter.output
 }
 
-pub fn lex_including_trivia(source_code: &str) -> impl Iterator<Item = &str> {
+fn lex_including_trivia(source_code: &str) -> impl Iterator<Item = &str> {
     source_code.lines().flat_map(|line| {
         let (line, comment) =
             line.find('#').map_or((line, None), |comment_index| {
