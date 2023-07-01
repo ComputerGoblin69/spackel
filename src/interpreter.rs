@@ -32,9 +32,7 @@ impl Interpreter<'_> {
     fn pop(&mut self) -> Value {
         self.stack.pop().unwrap()
     }
-}
 
-impl Interpreter<'_> {
     fn interpret(&mut self) {
         for instruction in &*self.program.functions["main"].body {
             self.interpret_instruction(instruction);
