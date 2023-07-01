@@ -9,7 +9,7 @@
 "unsafe" @keyword.special
 (then_statement "end" @keyword.control.conditional .)
 (then_else_statement "end" @keyword.control.conditional .)
-(repeat_loop "end" @keyword.control.control.loop .)
+(repeat_loop "end" @keyword.control.loop .)
 [
   "do"
   "end"
