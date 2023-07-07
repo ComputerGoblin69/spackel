@@ -1,8 +1,10 @@
 #![no_std]
 
 extern "C" {
-    fn fputs(
-        s: *const core::ffi::c_char,
+    fn fwrite(
+        ptr: *const core::ffi::c_void,
+        size: usize,
+        nmemb: usize,
         stream: *mut core::ffi::c_void,
     ) -> i32;
     fn printf(fmt: *const core::ffi::c_char, ...) -> i32;
@@ -12,12 +14,12 @@ extern "C" {
 
 #[no_mangle]
 pub unsafe extern "C" fn spkl_print_char(n: u32) {
-    let mut buf = [0; 5];
-    char::from_u32(n)
+    let mut buf = [0; 4];
+    let s = char::from_u32(n)
         .unwrap_or(char::REPLACEMENT_CHARACTER)
         .encode_utf8(&mut buf);
     unsafe {
-        fputs(buf.as_ptr().cast(), stdout);
+        fwrite(s.as_ptr().cast(), 1, s.len(), stdout);
     }
 }
 
