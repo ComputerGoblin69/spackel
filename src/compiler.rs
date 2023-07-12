@@ -222,8 +222,7 @@ impl Compiler<'_> {
                 let call_args =
                     args.iter().map(|&arg| self.take(arg)).collect::<Vec<_>>();
                 let inst = fb.ins().call(func_ref, &call_args);
-                for (value, &res) in std::iter::zip(&to, fb.inst_results(inst))
-                {
+                for (value, &res) in std::iter::zip(to, fb.inst_results(inst)) {
                     self.set(value, res);
                 }
             }
@@ -412,7 +411,7 @@ impl Compiler<'_> {
         for assignment in body.assignments {
             self.compile_assignment(assignment, fb);
         }
-        for (value, out) in std::iter::zip(&to, &body.outputs) {
+        for (value, out) in std::iter::zip(to, &body.outputs) {
             self.set(
                 value,
                 fb.append_block_param(
@@ -465,7 +464,7 @@ impl Compiler<'_> {
         for assignment in then.assignments {
             self.compile_assignment(assignment, fb);
         }
-        for (value, out) in std::iter::zip(&to, &then.outputs) {
+        for (value, out) in std::iter::zip(to, &then.outputs) {
             let v = self.ssa_values[out];
             self.set(
                 value,
@@ -525,7 +524,7 @@ impl Compiler<'_> {
             self.compile_assignment(assignment, fb);
         }
         let (&condition, outputs) = body.outputs.split_last().unwrap();
-        for (value, out) in std::iter::zip(&to, outputs) {
+        for (value, out) in std::iter::zip(to, outputs) {
             self.set(value, self.ssa_values[out]);
         }
         fb.ins().brif(

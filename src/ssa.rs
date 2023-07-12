@@ -47,7 +47,7 @@ impl From<Value> for ValueSequence {
     }
 }
 
-impl IntoIterator for &ValueSequence {
+impl IntoIterator for ValueSequence {
     type Item = Value;
 
     type IntoIter = ValueSequenceIter;
@@ -399,7 +399,7 @@ impl GraphBuilder<'_> {
         let remaining_len = self.stack.len() - arg_count;
         let args = self.stack[remaining_len..].into();
         self.stack.truncate(remaining_len);
-        self.stack.extend(&to);
+        self.stack.extend(to);
         self.add(Assignment { to, args, op });
     }
 
@@ -637,7 +637,7 @@ pub fn propagate_drops(graph: &mut Graph) {
     // Remove drops for values created by useless operations.
     let mut produced = graph.inputs.iter().copied().collect::<HashSet<_>>();
     out.retain(|assignment| {
-        produced.extend(&assignment.to);
+        produced.extend(assignment.to);
         assignment.args.iter().all(|arg| produced.contains(arg))
     });
 
