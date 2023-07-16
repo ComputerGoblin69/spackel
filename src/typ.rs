@@ -61,37 +61,7 @@ pub fn check(program: Program) -> Result<CheckedProgram> {
         .functions
         .iter()
         .map(|(name, function)| {
-            let parameters = function
-                .parameters
-                .iter()
-                .map(|(param, span)| match param {
-                    Instruction::PushType(typ) => Ok(typ.clone()),
-                    _ => Err(diagnostics::error(
-                        "unsupported instruction in function signature"
-                            .to_owned(),
-                        vec![primary_label(*span, "")],
-                    )),
-                })
-                .collect::<Result<Box<_>, _>>()?;
-            let returns = function
-                .returns
-                .iter()
-                .map(|(param, span)| match param {
-                    Instruction::PushType(typ) => Ok(typ.clone()),
-                    _ => Err(diagnostics::error(
-                        "unsupported instruction in function signature"
-                            .to_owned(),
-                        vec![primary_label(*span, "")],
-                    )),
-                })
-                .collect::<Result<Box<_>, _>>()?;
-            Ok((
-                name.clone(),
-                FunctionSignature {
-                    parameters,
-                    returns,
-                },
-            ))
+            Ok((name.clone(), check_function_signature(function)?))
         })
         .collect::<Result<_>>()?;
 
@@ -101,6 +71,37 @@ pub fn check(program: Program) -> Result<CheckedProgram> {
         unsafe_layers: 0,
     }
     .check(program)
+}
+
+fn check_function_signature(
+    function: &Function,
+) -> Result<FunctionSignature, anyhow::Error> {
+    let parameters = function
+        .parameters
+        .iter()
+        .map(|(param, span)| match param {
+            Instruction::PushType(typ) => Ok(typ.clone()),
+            _ => Err(diagnostics::error(
+                "unsupported instruction in function signature".to_owned(),
+                vec![primary_label(*span, "")],
+            )),
+        })
+        .collect::<Result<Box<_>, _>>()?;
+    let returns = function
+        .returns
+        .iter()
+        .map(|(param, span)| match param {
+            Instruction::PushType(typ) => Ok(typ.clone()),
+            _ => Err(diagnostics::error(
+                "unsupported instruction in function signature".to_owned(),
+                vec![primary_label(*span, "")],
+            )),
+        })
+        .collect::<Result<Box<_>, _>>()?;
+    Ok(FunctionSignature {
+        parameters,
+        returns,
+    })
 }
 
 struct Checker {
