@@ -73,9 +73,7 @@ pub fn check(program: Program) -> Result<CheckedProgram> {
     .check(program)
 }
 
-fn check_function_signature(
-    function: &Function,
-) -> Result<FunctionSignature, anyhow::Error> {
+fn check_function_signature(function: &Function) -> Result<FunctionSignature> {
     let parameters = function
         .parameters
         .iter()
