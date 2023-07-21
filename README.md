@@ -31,9 +31,8 @@ you, including ensuring that the runtime and the compiler itself are up to date:
 ./main
 ```
 
-Spackel files can be formatted with the `format` command. The result gets
-printed; it does not overwrite the file. If no file is provided, stdin is
-formatted instead.
+Spackel code can be formatted with the `format` command, which reads from stdin
+and writes to stdout.
 
 ### Cross-compilation
 

@@ -64,13 +64,9 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
             compiler::compile(program, &compilation_options)
         }
         "format" => {
-            let source_code = if let Some(source_path) = args.next() {
-                std::fs::read_to_string(source_path)
-                    .context("failed to read source file")?
-            } else {
-                std::io::read_to_string(std::io::stdin().lock())
-                    .context("failed to read stdin")?
-            };
+            ensure!(args.len() == 0, "too many command line arguments");
+            let source_code = std::io::read_to_string(std::io::stdin().lock())
+                .context("failed to read stdin")?;
             print!("{}", formatter::format(&source_code));
             Ok(())
         }
