@@ -9,6 +9,46 @@ use std::{
     ops::Range,
 };
 
+pub struct Program {
+    pub function_signatures: HashMap<String, FunctionSignature>,
+    pub function_bodies: HashMap<String, Graph>,
+}
+
+pub fn convert(program: crate::typ::CheckedProgram) -> Program {
+    let function_signatures = program
+        .functions
+        .iter()
+        .map(|(name, function)| (name.clone(), function.signature.clone()))
+        .collect::<HashMap<_, _>>();
+
+    let mut value_generator = ValueGenerator::default();
+
+    let function_bodies = program
+        .functions
+        .into_iter()
+        .map(|(name, function)| {
+            let input_count =
+                function.signature.parameters.len().try_into().unwrap();
+            let mut body = Graph::from_block(
+                function.body,
+                input_count,
+                &function_signatures,
+                &mut value_generator,
+            );
+            propagate_drops(&mut body);
+            if std::env::var_os("SPACKEL_PRINT_SSA").is_some() {
+                eprintln!("{name}: {body:#?}");
+            }
+            (name, body)
+        })
+        .collect();
+
+    Program {
+        function_signatures,
+        function_bodies,
+    }
+}
+
 type GInstruction = (Instruction<Generics>, Generics);
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

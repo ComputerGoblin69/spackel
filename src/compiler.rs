@@ -25,10 +25,7 @@ pub struct Options<'a> {
     pub out_path: &'a Path,
 }
 
-pub fn compile(
-    program: crate::typ::CheckedProgram,
-    options: &Options,
-) -> Result<()> {
+pub fn compile(program: &ssa::Program, options: &Options) -> Result<()> {
     let mut shared_builder = settings::builder();
     shared_builder.enable("is_pic")?;
     shared_builder.set("opt_level", "speed_and_size")?;
@@ -38,13 +35,6 @@ pub fn compile(
         .finish(shared_flags)?;
     let extern_function_signatures = extern_function_signatures(&*isa);
 
-    let function_signatures = program
-        .functions
-        .iter()
-        .map(|(name, function)| (name.clone(), function.signature.clone()))
-        .collect();
-    let value_generator = ssa::ValueGenerator::default();
-
     let object_builder = ObjectBuilder::new(
         isa.clone(),
         [],
@@ -53,15 +43,13 @@ pub fn compile(
     let mut object_module = ObjectModule::new(object_builder);
 
     let clif_function_signatures = program
-        .functions
+        .function_signatures
         .iter()
-        .map(|(name, function)| {
-            (name.clone(), function.signature.to_clif(name, &*isa))
-        })
+        .map(|(name, signature)| (&**name, signature.to_clif(name, &*isa)))
         .collect::<HashMap<_, _>>();
     let function_ids = clif_function_signatures
         .iter()
-        .map(|(name, signature)| {
+        .map(|(&name, signature)| {
             let func_id = if name == "main" {
                 object_module.declare_function(
                     "main",
@@ -78,9 +66,7 @@ pub fn compile(
 
     let mut compiler = Compiler {
         function_ids,
-        function_signatures,
         clif_function_signatures,
-        value_generator,
         ssa_values: HashMap::new(),
         isa: &*isa,
         object_module,
@@ -97,10 +83,8 @@ pub fn compile(
 }
 
 struct Compiler<'a> {
-    function_signatures: HashMap<String, FunctionSignature>,
-    clif_function_signatures: HashMap<String, Signature>,
-    function_ids: HashMap<String, FuncId>,
-    value_generator: ssa::ValueGenerator,
+    clif_function_signatures: HashMap<&'a str, Signature>,
+    function_ids: HashMap<&'a str, FuncId>,
     ssa_values: HashMap<ssa::Value, Value>,
     isa: &'a dyn TargetIsa,
     object_module: ObjectModule,
@@ -139,12 +123,12 @@ impl Compiler<'_> {
         fb.ins().call(func_ref, args)
     }
 
-    fn compile(&mut self, program: crate::typ::CheckedProgram) -> Result<()> {
+    fn compile(&mut self, program: &ssa::Program) -> Result<()> {
         let mut ctx = Context::new();
         let mut func_ctx = FunctionBuilderContext::new();
 
-        for (name, function) in program.functions {
-            self.compile_function(&name, function, &mut ctx, &mut func_ctx)?;
+        for (name, body) in &program.function_bodies {
+            self.compile_function(name, body, &mut ctx, &mut func_ctx)?;
         }
 
         Ok(())
@@ -153,55 +137,39 @@ impl Compiler<'_> {
     fn compile_function(
         &mut self,
         name: &str,
-        function: crate::typ::CheckedFunction,
+        body: &ssa::Graph,
         ctx: &mut Context,
         func_ctx: &mut FunctionBuilderContext,
     ) -> Result<()> {
         let signature = self.clif_function_signatures[name].clone();
-        let input_count = signature.params.len().try_into().unwrap();
         let func_id = self.function_ids[name];
         ctx.clear();
         ctx.func =
             Function::with_name_signature(UserFuncName::default(), signature);
 
-        let mut graph = ssa::Graph::from_block(
-            function.body,
-            input_count,
-            &self.function_signatures,
-            &mut self.value_generator,
-        );
-        ssa::propagate_drops(&mut graph);
-        if std::env::var_os("SPACKEL_PRINT_SSA").is_some() {
-            eprintln!("{name}: {graph:#?}");
-        }
-
         let mut fb = FunctionBuilder::new(&mut ctx.func, func_ctx);
         let block = fb.create_block();
         fb.append_block_params_for_function_params(block);
         for (&ssa_value, &param) in
-            std::iter::zip(&graph.inputs, fb.block_params(block))
+            std::iter::zip(&body.inputs, fb.block_params(block))
         {
             self.set(ssa_value, param);
         }
         fb.switch_to_block(block);
         fb.seal_block(block);
 
-        for assignment in graph.assignments {
+        for assignment in &body.assignments {
             self.compile_assignment(assignment, &mut fb);
         }
 
-        if name == "main" {
-            let exit_code = self.value_generator.new_value();
-            self.set(exit_code, fb.ins().iconst(I32, 0));
-            graph.outputs.push(exit_code);
-        }
-        fb.ins().return_(
-            &graph
-                .outputs
-                .iter()
-                .map(|output| self.ssa_values[output])
-                .collect::<Vec<_>>(),
-        );
+        let outputs = body
+            .outputs
+            .iter()
+            .map(|output| self.ssa_values[output])
+            // Exit code
+            .chain((name == "main").then(|| fb.ins().iconst(I32, 0)))
+            .collect::<Vec<_>>();
+        fb.ins().return_(&outputs);
 
         fb.finalize();
         self.object_module.define_function(func_id, ctx)?;
@@ -211,12 +179,14 @@ impl Compiler<'_> {
 
     fn compile_assignment(
         &mut self,
-        ssa::Assignment { to, args, op }: ssa::Assignment,
+        assignment: &ssa::Assignment,
         fb: &mut FunctionBuilder,
     ) {
-        match op {
+        let to = assignment.to;
+        let args = &assignment.args;
+        match &assignment.op {
             Op::Call(name) => {
-                let func_id = self.function_ids[&*name];
+                let func_id = self.function_ids[&**name];
                 let func_ref =
                     self.object_module.declare_func_in_func(func_id, fb.func);
                 let call_args =
@@ -226,11 +196,11 @@ impl Compiler<'_> {
                     self.set(value, res);
                 }
             }
-            Op::Then(body) => self.compile_then(to, &args, *body, fb),
+            Op::Then(body) => self.compile_then(to, args, body, fb),
             Op::ThenElse(then, else_) => {
-                self.compile_then_else(to, &args, *then, *else_, fb);
+                self.compile_then_else(to, args, then, else_, fb);
             }
-            Op::Repeat(body) => self.compile_repeat(to, &args, *body, fb),
+            Op::Repeat(body) => self.compile_repeat(to, args, body, fb),
             Op::Dup => {
                 let v = self.take(args[0]);
                 self.ssa_values.insert(to + 0, v);
@@ -240,13 +210,13 @@ impl Compiler<'_> {
                 self.take(args[0]);
             }
             Op::I32(number) => {
-                self.set(to + 0, fb.ins().iconst(I32, i64::from(number)));
+                self.set(to + 0, fb.ins().iconst(I32, i64::from(*number)));
             }
             Op::F32(number) => {
-                self.set(to + 0, fb.ins().f32const(number));
+                self.set(to + 0, fb.ins().f32const(*number));
             }
             Op::Bool(b) => {
-                self.set(to + 0, fb.ins().iconst(I8, i64::from(b)));
+                self.set(to + 0, fb.ins().iconst(I8, i64::from(*b)));
             }
             Op::Type(_) | Op::TypeOf | Op::Ptr => todo!(),
             Op::PrintChar => {
@@ -384,7 +354,7 @@ impl Compiler<'_> {
         &mut self,
         to: ssa::ValueSequence,
         args: &[ssa::Value],
-        body: ssa::Graph,
+        body: &ssa::Graph,
         fb: &mut FunctionBuilder,
     ) {
         let (&condition, args) = args.split_last().unwrap();
@@ -408,7 +378,7 @@ impl Compiler<'_> {
         fb.seal_block(then);
 
         fb.switch_to_block(then);
-        for assignment in body.assignments {
+        for assignment in &body.assignments {
             self.compile_assignment(assignment, fb);
         }
         for (value, out) in std::iter::zip(to, &body.outputs) {
@@ -437,8 +407,8 @@ impl Compiler<'_> {
         &mut self,
         to: ssa::ValueSequence,
         args: &[ssa::Value],
-        then: ssa::Graph,
-        else_: ssa::Graph,
+        then: &ssa::Graph,
+        else_: &ssa::Graph,
         fb: &mut FunctionBuilder,
     ) {
         let (&condition, args) = args.split_last().unwrap();
@@ -461,7 +431,7 @@ impl Compiler<'_> {
         fb.seal_block(else_block);
 
         fb.switch_to_block(then_block);
-        for assignment in then.assignments {
+        for assignment in &then.assignments {
             self.compile_assignment(assignment, fb);
         }
         for (value, out) in std::iter::zip(to, &then.outputs) {
@@ -481,7 +451,7 @@ impl Compiler<'_> {
         );
 
         fb.switch_to_block(else_block);
-        for assignment in else_.assignments {
+        for assignment in &else_.assignments {
             self.compile_assignment(assignment, fb);
         }
         fb.ins().jump(
@@ -501,7 +471,7 @@ impl Compiler<'_> {
         &mut self,
         to: ssa::ValueSequence,
         args: &[ssa::Value],
-        body: ssa::Graph,
+        body: &ssa::Graph,
         fb: &mut FunctionBuilder,
     ) {
         let loop_block = fb.create_block();
@@ -520,7 +490,7 @@ impl Compiler<'_> {
             &args.iter().map(|&arg| self.take(arg)).collect::<Vec<_>>(),
         );
         fb.switch_to_block(loop_block);
-        for assignment in body.assignments {
+        for assignment in &body.assignments {
             self.compile_assignment(assignment, fb);
         }
         let (&condition, outputs) = body.outputs.split_last().unwrap();
