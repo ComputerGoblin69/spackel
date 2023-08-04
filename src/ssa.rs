@@ -1,5 +1,5 @@
 use crate::{
-    ir::{BinLogicOp, BinMathOp, Comparison, Instruction},
+    ir::{BinLogicOp, BinMathOp, Block, Comparison, Instruction},
     typ::{FunctionSignature, Generics, Type},
 };
 use itertools::Itertools;
@@ -45,8 +45,6 @@ pub fn convert(program: crate::typ::CheckedProgram) -> Program {
         function_bodies,
     }
 }
-
-type GInstruction = (Instruction<Generics>, Generics);
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Value(u32);
@@ -156,7 +154,7 @@ pub struct Graph {
 
 impl Graph {
     pub fn from_block(
-        block: Box<[GInstruction]>,
+        block: Box<Block<Generics>>,
         input_count: u32,
         function_signatures: &HashMap<String, FunctionSignature>,
         value_generator: &mut ValueGenerator,
@@ -276,7 +274,10 @@ struct GraphBuilder<'g> {
 }
 
 impl GraphBuilder<'_> {
-    fn add_instruction(&mut self, (instruction, generics): GInstruction) {
+    fn add_instruction(
+        &mut self,
+        (instruction, generics): (Instruction<Generics>, Generics),
+    ) {
         let (to_count, arg_count, op) = match instruction {
             Instruction::Call(name) => {
                 let signature = &self.function_signatures[&*name];
