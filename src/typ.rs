@@ -2,7 +2,7 @@ use crate::{
     diagnostics::{self, primary_label},
     ir::{BinMathOp, Function, Instruction, Program},
 };
-use anyhow::{ensure, Context, Result};
+use anyhow::{ensure, Result};
 use codemap::Span;
 use itertools::Itertools;
 use std::{
@@ -45,7 +45,6 @@ pub struct CheckedProgram {
 }
 
 pub struct CheckedFunction {
-    declaration_span: Span,
     pub signature: FunctionSignature,
     pub body: Box<[(Instruction<Generics>, Generics)]>,
 }
@@ -57,11 +56,16 @@ pub struct FunctionSignature {
 }
 
 pub fn check(program: Program) -> Result<CheckedProgram> {
+    ensure!(
+        program.functions.contains_key("main"),
+        "program has no `main` function"
+    );
+
     let function_signatures = program
         .functions
         .iter()
         .map(|(name, function)| {
-            Ok((name.clone(), check_function_signature(function)?))
+            Ok((name.clone(), check_function_signature(name, function)?))
         })
         .collect::<Result<_>>()?;
 
@@ -73,7 +77,10 @@ pub fn check(program: Program) -> Result<CheckedProgram> {
     .check(program)
 }
 
-fn check_function_signature(function: &Function) -> Result<FunctionSignature> {
+fn check_function_signature(
+    name: &str,
+    function: &Function,
+) -> Result<FunctionSignature> {
     let parameters = function
         .parameters
         .iter()
@@ -96,6 +103,18 @@ fn check_function_signature(function: &Function) -> Result<FunctionSignature> {
             )),
         })
         .collect::<Result<Box<_>, _>>()?;
+
+    if name == "main" {
+        ensure!(
+            parameters.is_empty() && returns.is_empty(),
+            diagnostics::error(
+                "`main` function has wrong signature".to_owned(),
+                vec![primary_label(function.declaration_span, "defined here")]
+            )
+            .note("`main` must have no parameters and no return values")
+        );
+    }
+
     Ok(FunctionSignature {
         parameters,
         returns,
@@ -110,7 +129,7 @@ struct Checker {
 
 impl Checker {
     fn check(&mut self, program: Program) -> Result<CheckedProgram> {
-        let checked_program = CheckedProgram {
+        Ok(CheckedProgram {
             functions: program
                 .functions
                 .into_iter()
@@ -120,23 +139,7 @@ impl Checker {
                     Ok((name, checked_function))
                 })
                 .collect::<Result<_>>()?,
-        };
-
-        let main = checked_program
-            .functions
-            .get("main")
-            .context("program has no `main` function")?;
-        ensure!(
-            main.signature.parameters.is_empty()
-                && main.signature.returns.is_empty(),
-            diagnostics::error(
-                "`main` function has wrong signature".to_owned(),
-                vec![primary_label(main.declaration_span, "defined here")]
-            )
-            .note("`main` must have no parameters and no return values")
-        );
-
-        Ok(checked_program)
+        })
     }
 
     fn check_function(
@@ -175,7 +178,6 @@ impl Checker {
         );
 
         Ok(CheckedFunction {
-            declaration_span: function.declaration_span,
             signature: self.function_signatures[name].clone(),
             body,
         })
