@@ -34,7 +34,7 @@ impl Interpreter<'_> {
     }
 
     fn interpret(&mut self) {
-        for instruction in &*self.program.functions["main"].body {
+        for instruction in &*self.program.function_bodies["main"] {
             self.interpret_instruction(instruction);
         }
     }
@@ -73,8 +73,7 @@ impl Interpreter<'_> {
     ) {
         match instruction {
             Instruction::Call(name) => {
-                let function = &self.program.functions[&**name];
-                for instruction in &*function.body {
+                for instruction in &*self.program.function_bodies[&**name] {
                     self.interpret_instruction(instruction);
                 }
             }

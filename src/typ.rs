@@ -1,6 +1,6 @@
 use crate::{
     diagnostics::{self, primary_label},
-    ir::{BinMathOp, Function, Instruction, Program},
+    ir::{BinMathOp, Block, Function, Instruction, Program},
 };
 use anyhow::{ensure, Result};
 use codemap::Span;
@@ -41,12 +41,8 @@ impl fmt::Display for Type {
 pub type Generics = Box<[Type]>;
 
 pub struct CheckedProgram {
-    pub functions: HashMap<String, CheckedFunction>,
-}
-
-pub struct CheckedFunction {
-    pub signature: FunctionSignature,
-    pub body: Box<[(Instruction<Generics>, Generics)]>,
+    pub function_signatures: HashMap<String, FunctionSignature>,
+    pub function_bodies: HashMap<String, Box<Block<Generics>>>,
 }
 
 #[derive(Clone)]
@@ -128,17 +124,19 @@ struct Checker {
 }
 
 impl Checker {
-    fn check(&mut self, program: Program) -> Result<CheckedProgram> {
+    fn check(mut self, program: Program) -> Result<CheckedProgram> {
+        let function_bodies = program
+            .functions
+            .into_iter()
+            .map(|(name, function)| {
+                let body = self.check_function(&name, function)?;
+                Ok((name, body))
+            })
+            .collect::<Result<_>>()?;
+
         Ok(CheckedProgram {
-            functions: program
-                .functions
-                .into_iter()
-                .map(|(name, function)| {
-                    let checked_function =
-                        self.check_function(&name, function)?;
-                    Ok((name, checked_function))
-                })
-                .collect::<Result<_>>()?,
+            function_signatures: self.function_signatures,
+            function_bodies,
         })
     }
 
@@ -146,7 +144,7 @@ impl Checker {
         &mut self,
         name: &str,
         function: Function,
-    ) -> Result<CheckedFunction> {
+    ) -> Result<Box<Block<Generics>>> {
         self.stack = self.function_signatures[name].parameters.to_vec();
         let body = function
             .body
@@ -177,10 +175,7 @@ impl Checker {
             )
         );
 
-        Ok(CheckedFunction {
-            signature: self.function_signatures[name].clone(),
-            body,
-        })
+        Ok(body)
     }
 
     fn transform(

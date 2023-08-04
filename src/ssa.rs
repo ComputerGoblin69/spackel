@@ -15,24 +15,21 @@ pub struct Program {
 }
 
 pub fn convert(program: crate::typ::CheckedProgram) -> Program {
-    let function_signatures = program
-        .functions
-        .iter()
-        .map(|(name, function)| (name.clone(), function.signature.clone()))
-        .collect::<HashMap<_, _>>();
-
     let mut value_generator = ValueGenerator::default();
 
     let function_bodies = program
-        .functions
+        .function_bodies
         .into_iter()
-        .map(|(name, function)| {
-            let input_count =
-                function.signature.parameters.len().try_into().unwrap();
+        .map(|(name, body)| {
+            let input_count = program.function_signatures[&name]
+                .parameters
+                .len()
+                .try_into()
+                .unwrap();
             let mut body = Graph::from_block(
-                function.body,
+                body,
                 input_count,
-                &function_signatures,
+                &program.function_signatures,
                 &mut value_generator,
             );
             propagate_drops(&mut body);
@@ -44,7 +41,7 @@ pub fn convert(program: crate::typ::CheckedProgram) -> Program {
         .collect();
 
     Program {
-        function_signatures,
+        function_signatures: program.function_signatures,
         function_bodies,
     }
 }
