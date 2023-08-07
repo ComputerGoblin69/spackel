@@ -1,6 +1,7 @@
-mod renaming;
+pub mod renaming;
 
 use crate::{
+    call_graph::Function,
     ir::{BinLogicOp, BinMathOp, Block, Comparison, Instruction},
     typ::{FunctionSignature, Generics, Type},
 };
@@ -8,7 +9,7 @@ use itertools::Itertools;
 use std::{
     collections::{HashMap, HashSet},
     fmt, mem,
-    ops::Range,
+    ops::{ControlFlow, Range},
 };
 
 pub struct Program {
@@ -16,9 +17,10 @@ pub struct Program {
     pub function_bodies: HashMap<String, Graph>,
 }
 
-pub fn convert(program: crate::typ::CheckedProgram) -> Program {
-    let mut value_generator = ValueGenerator::default();
-
+pub fn convert(
+    program: crate::typ::CheckedProgram,
+    value_generator: &mut ValueGenerator,
+) -> Program {
     let function_bodies = program
         .function_bodies
         .into_iter()
@@ -32,7 +34,7 @@ pub fn convert(program: crate::typ::CheckedProgram) -> Program {
                 body,
                 input_count,
                 &program.function_signatures,
-                &mut value_generator,
+                value_generator,
             );
             propagate_drops(&mut body);
             if std::env::var_os("SPACKEL_PRINT_SSA").is_some() {
@@ -110,6 +112,10 @@ impl ValueSequence {
 
     fn range(self) -> Range<Value> {
         Value(self.start)..Value(self.start + u32::from(self.count))
+    }
+
+    const fn count(self) -> u8 {
+        self.count
     }
 }
 
@@ -194,6 +200,44 @@ impl Graph {
             .find(|assignment| assignment.to.range().contains(&value))
             .map(|assignment| &assignment.op)
     }
+
+    pub fn is_small_enough_to_inline(&self) -> bool {
+        self.contains_at_most_n_ops(10)
+    }
+
+    fn contains_at_most_n_ops(&self, n: usize) -> bool {
+        let mut op_count = 0;
+        self.each_op(&mut |_| {
+            if op_count < n {
+                op_count += 1;
+                ControlFlow::Continue(())
+            } else {
+                ControlFlow::Break(())
+            }
+        })
+        .is_continue()
+    }
+
+    pub fn each_op<B>(
+        &self,
+        f: &mut impl FnMut(&Op) -> ControlFlow<B>,
+    ) -> ControlFlow<B> {
+        for assignment in &self.assignments {
+            let op = &assignment.op;
+            f(op)?;
+            match op {
+                Op::ThenElse(then, else_) => {
+                    then.each_op(f)?;
+                    else_.each_op(f)?;
+                }
+                Op::Then(body) | Op::Repeat(body) => {
+                    body.each_op(f)?;
+                }
+                _ => {}
+            }
+        }
+        ControlFlow::Continue(())
+    }
 }
 
 #[derive(Clone)]
@@ -266,11 +310,11 @@ impl Op {
 }
 
 pub struct GraphBuilder<'g> {
-    graph: &'g mut Graph,
-    function_signatures: &'g HashMap<String, FunctionSignature>,
-    value_generator: &'g mut ValueGenerator,
-    stack: Vec<Value>,
-    renames: renaming::Renames,
+    pub graph: &'g mut Graph,
+    pub function_signatures: &'g HashMap<String, FunctionSignature>,
+    pub value_generator: &'g mut ValueGenerator,
+    pub stack: Vec<Value>,
+    pub renames: renaming::Renames,
 }
 
 impl GraphBuilder<'_> {
@@ -625,6 +669,43 @@ impl GraphBuilder<'_> {
             _ => {}
         }
         self.graph.assignments.push(Assignment { to, args, op });
+    }
+
+    pub fn rebuild_inlining(&mut self, function: &Function) {
+        for assignment in mem::take(&mut self.graph.assignments) {
+            if matches!(&assignment.op, Op::Call(name) if **name == *function.name)
+            {
+                self.renames.extend(
+                    function
+                        .body
+                        .inputs
+                        .iter()
+                        .copied()
+                        .zip(assignment.args.iter().copied()),
+                );
+                for mut assignment in function.body.assignments.iter().cloned()
+                {
+                    let new_out = self
+                        .value_generator
+                        .new_value_sequence(assignment.to.count());
+                    self.renames.extend(assignment.to.iter().zip(new_out));
+                    assignment.to = new_out;
+                    self.add(assignment);
+                }
+                let outputs = function
+                    .body
+                    .outputs
+                    .iter()
+                    .map(|&out| self.renames.take(out))
+                    .collect::<Vec<_>>();
+                self.renames.extend(assignment.to.iter().zip(outputs));
+            } else {
+                self.add(assignment);
+            }
+        }
+        for out in &mut self.graph.outputs {
+            *out = self.renames.take(*out);
+        }
     }
 }
 

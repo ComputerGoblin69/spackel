@@ -1,0 +1,86 @@
+Graph {
+    Ty: "Directed",
+    node_count: 2,
+    edge_count: 1,
+    edges: (1, 0),
+    node weights: {
+        0: RefCell {
+            value: Function {
+                name: "iterate",
+                body: Graph {
+                    inputs: [
+                        v24,
+                        v25,
+                    ],
+                    assignments: [
+                        [v26, v27] <- [v24] Dup,
+                        [] <- [v27] PrintlnI32,
+                        [v28, v29] <- [v25] Dup,
+                        [v30] <- [v26, v28] BinMath {
+                            operation: Add,
+                            typ: Some(
+                                I32,
+                            ),
+                        },
+                    ],
+                    outputs: [
+                        v29,
+                        v30,
+                    ],
+                },
+            },
+        },
+        1: RefCell {
+            value: Function {
+                name: "main",
+                body: Graph {
+                    inputs: [],
+                    assignments: [
+                        [v0] <- [] I32(
+                            0,
+                        ),
+                        [v1] <- [] I32(
+                            1,
+                        ),
+                        [v2, v3] <- [v0, v1] Call(
+                            "iterate",
+                        ),
+                        [v4, v5] <- [v2, v3] Call(
+                            "iterate",
+                        ),
+                        [v6, v7] <- [v4, v5] Call(
+                            "iterate",
+                        ),
+                        [v8, v9] <- [v6, v7] Call(
+                            "iterate",
+                        ),
+                        [v10, v11] <- [v8, v9] Call(
+                            "iterate",
+                        ),
+                        [v12, v13] <- [v10, v11] Call(
+                            "iterate",
+                        ),
+                        [v14, v15] <- [v12, v13] Call(
+                            "iterate",
+                        ),
+                        [v16, v17] <- [v14, v15] Call(
+                            "iterate",
+                        ),
+                        [v18, v19] <- [v16, v17] Call(
+                            "iterate",
+                        ),
+                        [v20, v21] <- [v18, v19] Call(
+                            "iterate",
+                        ),
+                        [v22, v23] <- [v20, v21] Call(
+                            "iterate",
+                        ),
+                        [] <- [v23] Drop,
+                        [] <- [v22] Drop,
+                    ],
+                    outputs: [],
+                },
+            },
+        },
+    },
+}

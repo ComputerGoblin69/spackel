@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 #![warn(clippy::nursery, clippy::pedantic)]
 
+mod call_graph;
 mod compiler;
 mod diagnostics;
 mod formatter;
@@ -54,7 +55,11 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
 
             let program = ir::Program::parse(&file)?;
             let program = typ::check(program)?;
-            let program = ssa::convert(program);
+            let mut value_generator = ssa::ValueGenerator::default();
+            let program = ssa::convert(program, &mut value_generator);
+            let mut graph = call_graph::of(program.function_bodies);
+            call_graph::inline(&mut graph, &mut value_generator);
+
             let target_triple = std::env::var("SPACKEL_TARGET");
             let compilation_options = compiler::Options {
                 target_triple: target_triple
@@ -62,7 +67,11 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
                     .unwrap_or("x86_64-unknown-linux-gnu"),
                 out_path: Path::new("main.o"),
             };
-            compiler::compile(&program, &compilation_options)
+            compiler::compile(
+                &graph,
+                &program.function_signatures,
+                &compilation_options,
+            )
         }
         "format" => {
             ensure!(args.len() == 0, "too many command line arguments");

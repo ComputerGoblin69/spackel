@@ -1,4 +1,5 @@
 use crate::{
+    call_graph::CallGraph,
     ir::{BinLogicOp, BinMathOp, Comparison},
     ssa::{self, Op},
     typ::{FunctionSignature, Type},
@@ -25,7 +26,11 @@ pub struct Options<'a> {
     pub out_path: &'a Path,
 }
 
-pub fn compile(program: &ssa::Program, options: &Options) -> Result<()> {
+pub fn compile(
+    functions: &CallGraph,
+    function_signatures: &HashMap<String, FunctionSignature>,
+    options: &Options,
+) -> Result<()> {
     let mut shared_builder = settings::builder();
     shared_builder.enable("is_pic")?;
     shared_builder.set("opt_level", "speed_and_size")?;
@@ -42,8 +47,7 @@ pub fn compile(program: &ssa::Program, options: &Options) -> Result<()> {
     )?;
     let mut object_module = ObjectModule::new(object_builder);
 
-    let clif_function_signatures = program
-        .function_signatures
+    let clif_function_signatures = function_signatures
         .iter()
         .map(|(name, signature)| (&**name, signature.to_clif(name, &*isa)))
         .collect::<HashMap<_, _>>();
@@ -73,7 +77,7 @@ pub fn compile(program: &ssa::Program, options: &Options) -> Result<()> {
         extern_functions: HashMap::new(),
         extern_function_signatures,
     };
-    compiler.compile(program)?;
+    compiler.compile(functions)?;
 
     let object_bytes = compiler.object_module.finish().emit()?;
     let mut object_file = File::create(options.out_path)?;
@@ -123,12 +127,18 @@ impl Compiler<'_> {
         fb.ins().call(func_ref, args)
     }
 
-    fn compile(&mut self, program: &ssa::Program) -> Result<()> {
+    fn compile(&mut self, functions: &CallGraph) -> Result<()> {
         let mut ctx = Context::new();
         let mut func_ctx = FunctionBuilderContext::new();
 
-        for (name, body) in &program.function_bodies {
-            self.compile_function(name, body, &mut ctx, &mut func_ctx)?;
+        for function in functions.node_weights() {
+            let function = function.borrow();
+            self.compile_function(
+                &function.name,
+                &function.body,
+                &mut ctx,
+                &mut func_ctx,
+            )?;
         }
 
         Ok(())
