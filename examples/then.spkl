@@ -1,8 +1,8 @@
-macro even
+fn even : i32 -> bool do
   2 % 0 =
 end
 
-macro case
+fn case : i32 -> do
   dup even then
     dup println
   end
