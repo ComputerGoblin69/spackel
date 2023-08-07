@@ -1,0 +1,26 @@
+use super::Value;
+use std::collections::HashMap;
+
+#[derive(Default)]
+pub struct Renames(HashMap<Value, Value>);
+
+impl Renames {
+    pub fn insert(&mut self, from: Value, to: Value) {
+        debug_assert!(self.0.insert(from, to).is_none());
+    }
+
+    pub fn take(&mut self, mut value: Value) -> Value {
+        while let Some(renamed) = self.0.remove(&value) {
+            value = renamed;
+        }
+        value
+    }
+}
+
+impl Extend<(Value, Value)> for Renames {
+    fn extend<T: IntoIterator<Item = (Value, Value)>>(&mut self, iter: T) {
+        for (from, to) in iter {
+            self.insert(from, to);
+        }
+    }
+}

@@ -1,3 +1,5 @@
+mod renaming;
+
 use crate::{
     ir::{BinLogicOp, BinMathOp, Block, Comparison, Instruction},
     typ::{FunctionSignature, Generics, Type},
@@ -172,7 +174,7 @@ impl Graph {
             function_signatures,
             value_generator,
             stack: inputs,
-            renames: HashMap::new(),
+            renames: renaming::Renames::default(),
         };
         for instruction in block.into_vec() {
             graph_builder.add_instruction(instruction);
@@ -180,9 +182,7 @@ impl Graph {
         let mut renames = graph_builder.renames;
         graph.outputs = graph_builder.stack;
         for out in &mut graph.outputs {
-            while let Some(renamed) = renames.remove(out) {
-                *out = renamed;
-            }
+            *out = renames.take(*out);
         }
         graph
     }
@@ -265,12 +265,12 @@ impl Op {
     }
 }
 
-struct GraphBuilder<'g> {
+pub struct GraphBuilder<'g> {
     graph: &'g mut Graph,
     function_signatures: &'g HashMap<String, FunctionSignature>,
     value_generator: &'g mut ValueGenerator,
     stack: Vec<Value>,
-    renames: HashMap<Value, Value>,
+    renames: renaming::Renames,
 }
 
 impl GraphBuilder<'_> {
@@ -482,9 +482,7 @@ impl GraphBuilder<'_> {
         }: Assignment,
     ) {
         for arg in &mut *args {
-            while let Some(renamed) = self.renames.remove(arg) {
-                *arg = renamed;
-            }
+            *arg = self.renames.take(*arg);
         }
 
         match op {
@@ -506,9 +504,7 @@ impl GraphBuilder<'_> {
                             self.add(assignment);
                         }
                         for out in &mut body.outputs {
-                            while let Some(renamed) = self.renames.remove(out) {
-                                *out = renamed;
-                            }
+                            *out = self.renames.take(*out);
                         }
                         self.renames.extend(
                             to.iter().zip(body.outputs.iter().copied()),
@@ -534,9 +530,7 @@ impl GraphBuilder<'_> {
                         self.add(assignment);
                     }
                     for out in &mut body.outputs {
-                        while let Some(renamed) = self.renames.remove(out) {
-                            *out = renamed;
-                        }
+                        *out = self.renames.take(*out);
                     }
                     self.renames
                         .extend(to.iter().zip(body.outputs.iter().copied()));
