@@ -132,7 +132,6 @@ impl Compiler<'_> {
         let mut func_ctx = FunctionBuilderContext::new();
 
         for function in functions.node_weights() {
-            let function = function.borrow();
             self.compile_function(
                 &function.name,
                 &function.body,
