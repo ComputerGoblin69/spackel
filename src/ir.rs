@@ -200,7 +200,7 @@ fn instructions_until_terminator<'a>(
                     _ => bail!(unexpected_token(terminator, "expected `end`",)),
                 }
             }
-            _ => (token.try_into()?, token.span),
+            _ => (token.into(), token.span),
         }))
     })
     .collect::<Result<_>>()?;
@@ -327,11 +327,9 @@ pub enum Instruction<T = Span> {
     Tuck,
 }
 
-impl TryFrom<Token<'_>> for Instruction {
-    type Error = anyhow::Error;
-
-    fn try_from(token: Token<'_>) -> Result<Self> {
-        Ok(match &*token {
+impl From<Token<'_>> for Instruction {
+    fn from(token: Token) -> Self {
+        match &*token {
             "true" => Self::PushBool(true),
             "false" => Self::PushBool(false),
             "i32" => Self::PushType(Type::I32),
@@ -381,7 +379,7 @@ impl TryFrom<Token<'_>> for Instruction {
                     Self::Call(token.text.into())
                 }
             }
-        })
+        }
     }
 }
 
