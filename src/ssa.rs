@@ -12,15 +12,15 @@ use std::{
     ops::{ControlFlow, Range},
 };
 
-pub struct Program {
-    pub function_signatures: HashMap<String, FunctionSignature>,
-    pub function_bodies: HashMap<String, Graph>,
+pub struct Program<'src> {
+    pub function_signatures: HashMap<&'src str, FunctionSignature>,
+    pub function_bodies: HashMap<&'src str, Graph>,
 }
 
-pub fn convert(
-    program: crate::typ::CheckedProgram,
+pub fn convert<'src>(
+    program: crate::typ::CheckedProgram<'src>,
     value_generator: &mut ValueGenerator,
-) -> Program {
+) -> Program<'src> {
     let function_bodies = program
         .function_bodies
         .into_iter()
@@ -164,7 +164,7 @@ impl Graph {
     pub fn from_block(
         block: Box<Block<Generics>>,
         input_count: u32,
-        function_signatures: &HashMap<String, FunctionSignature>,
+        function_signatures: &HashMap<&str, FunctionSignature>,
         value_generator: &mut ValueGenerator,
     ) -> Self {
         let inputs = std::iter::repeat_with(|| value_generator.new_value())
@@ -311,7 +311,7 @@ impl Op {
 
 struct GraphBuilder<'g> {
     graph: &'g mut Graph,
-    function_signatures: &'g HashMap<String, FunctionSignature>,
+    function_signatures: &'g HashMap<&'g str, FunctionSignature>,
     value_generator: &'g mut ValueGenerator,
     stack: Vec<Value>,
     renames: renaming::Renames,

@@ -8,12 +8,12 @@ use codemap::Span;
 use itertools::{process_results, Itertools};
 use std::collections::HashMap;
 
-pub struct Program {
-    pub functions: HashMap<String, Function>,
+pub struct Program<'src> {
+    pub functions: HashMap<&'src str, Function>,
 }
 
-impl Program {
-    pub fn parse(file: &codemap::File) -> Result<Self> {
+impl<'src> Program<'src> {
+    pub fn parse(file: &'src codemap::File) -> Result<Self> {
         let tokens = expand_macros(lex(file));
         let functions = process_results(tokens, |tokens| {
             extra_iterators::batching_map(tokens, Function::parse)
@@ -220,7 +220,7 @@ impl Function {
     fn parse<'a>(
         mut tokens: &mut impl Iterator<Item = Token<'a>>,
         token: Token,
-    ) -> Result<(String, Self)> {
+    ) -> Result<(&'a str, Self)> {
         ensure!(
             *token == *"fn",
             unexpected_token(token, "expected function or macro definition")
@@ -266,7 +266,7 @@ impl Function {
         let (body, end) = instructions_until_specific_terminator("end")?;
 
         Ok((
-            name.text.to_owned(),
+            name.text,
             Self {
                 declaration_span: token.span.merge(name.span),
                 parameters,

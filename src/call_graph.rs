@@ -2,22 +2,20 @@ use crate::ssa::{Op, ValueGenerator};
 use petgraph::{prelude::DiGraph, Direction};
 use std::{collections::HashMap, convert::Infallible, ops::ControlFlow};
 
-pub type CallGraph = DiGraph<Function, ()>;
+pub type CallGraph<'src> = DiGraph<Function<'src>, ()>;
 
 #[derive(Debug)]
-pub struct Function {
-    pub name: String,
+pub struct Function<'src> {
+    pub name: &'src str,
     pub body: crate::ssa::Graph,
 }
 
-pub fn of(
-    mut function_bodies: HashMap<String, crate::ssa::Graph>,
-) -> CallGraph {
+pub fn of(mut function_bodies: HashMap<&str, crate::ssa::Graph>) -> CallGraph {
     let mut graph = DiGraph::new();
 
     let nodes = function_bodies
         .keys()
-        .map(|name| (&**name, graph.add_node(name.clone())))
+        .map(|&name| (name, graph.add_node(name)))
         .collect::<HashMap<_, _>>();
 
     for (caller, body) in &function_bodies {
@@ -32,8 +30,8 @@ pub fn of(
     }
 
     graph.map(
-        |_, name| Function {
-            name: name.clone(),
+        |_, &name| Function {
+            name,
             body: function_bodies.remove(name).unwrap(),
         },
         |_, ()| (),

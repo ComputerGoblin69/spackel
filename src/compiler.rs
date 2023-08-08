@@ -28,7 +28,7 @@ pub struct Options<'a> {
 
 pub fn compile(
     functions: &CallGraph,
-    function_signatures: &HashMap<String, FunctionSignature>,
+    function_signatures: &HashMap<&str, FunctionSignature>,
     options: &Options,
 ) -> Result<()> {
     let mut shared_builder = settings::builder();
@@ -133,7 +133,7 @@ impl Compiler<'_> {
 
         for function in functions.node_weights() {
             self.compile_function(
-                &function.name,
+                function.name,
                 &function.body,
                 &mut ctx,
                 &mut func_ctx,

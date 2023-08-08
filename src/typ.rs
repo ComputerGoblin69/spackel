@@ -40,9 +40,9 @@ impl fmt::Display for Type {
 
 pub type Generics = Box<[Type]>;
 
-pub struct CheckedProgram {
-    pub function_signatures: HashMap<String, FunctionSignature>,
-    pub function_bodies: HashMap<String, Box<Block<Generics>>>,
+pub struct CheckedProgram<'src> {
+    pub function_signatures: HashMap<&'src str, FunctionSignature>,
+    pub function_bodies: HashMap<&'src str, Box<Block<Generics>>>,
 }
 
 #[derive(Clone)]
@@ -61,7 +61,7 @@ pub fn check(program: Program) -> Result<CheckedProgram> {
         .functions
         .iter()
         .map(|(name, function)| {
-            Ok((name.clone(), check_function_signature(name, function)?))
+            Ok((*name, check_function_signature(name, function)?))
         })
         .collect::<Result<_>>()?;
 
@@ -117,19 +117,19 @@ fn check_function_signature(
     })
 }
 
-struct Checker {
+struct Checker<'src> {
     stack: Vec<Type>,
-    function_signatures: HashMap<String, FunctionSignature>,
+    function_signatures: HashMap<&'src str, FunctionSignature>,
     unsafe_layers: usize,
 }
 
-impl Checker {
-    fn check(mut self, program: Program) -> Result<CheckedProgram> {
+impl<'src> Checker<'src> {
+    fn check(mut self, program: Program<'src>) -> Result<CheckedProgram> {
         let function_bodies = program
             .functions
             .into_iter()
             .map(|(name, function)| {
-                let body = self.check_function(&name, function)?;
+                let body = self.check_function(name, function)?;
                 Ok((name, body))
             })
             .collect::<Result<_>>()?;

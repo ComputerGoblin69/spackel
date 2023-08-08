@@ -19,8 +19,8 @@ enum Value {
     Type(Type),
 }
 
-struct Interpreter<'a> {
-    program: &'a crate::typ::CheckedProgram,
+struct Interpreter<'src> {
+    program: &'src crate::typ::CheckedProgram<'src>,
     stack: Vec<Value>,
 }
 
