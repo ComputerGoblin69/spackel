@@ -159,8 +159,8 @@ impl Compiler<'_> {
         let mut fb = FunctionBuilder::new(&mut ctx.func, func_ctx);
         let block = fb.create_block();
         fb.append_block_params_for_function_params(block);
-        for (&ssa_value, &param) in
-            std::iter::zip(&body.inputs, fb.block_params(block))
+        for (ssa_value, &param) in
+            std::iter::zip(body.inputs, fb.block_params(block))
         {
             self.set(ssa_value, param);
         }
@@ -368,7 +368,7 @@ impl Compiler<'_> {
     ) {
         let (&condition, args) = args.split_last().unwrap();
 
-        for (arg, &input) in std::iter::zip(args, &body.inputs) {
+        for (arg, input) in std::iter::zip(args, body.inputs) {
             let clif_value = self.ssa_values[arg];
             self.set(input, clif_value);
         }
@@ -422,10 +422,10 @@ impl Compiler<'_> {
     ) {
         let (&condition, args) = args.split_last().unwrap();
 
-        for (arg, &input) in std::iter::zip(args, &then.inputs) {
+        for (arg, input) in std::iter::zip(args, then.inputs) {
             self.set(input, self.ssa_values[arg]);
         }
-        for (&arg, &input) in std::iter::zip(args, &else_.inputs) {
+        for (&arg, input) in std::iter::zip(args, else_.inputs) {
             let clif_value = self.take(arg);
             self.set(input, clif_value);
         }
@@ -486,7 +486,7 @@ impl Compiler<'_> {
         let loop_block = fb.create_block();
         let after_block = fb.create_block();
 
-        for (arg, &input) in std::iter::zip(args, &body.inputs) {
+        for (arg, input) in std::iter::zip(args, body.inputs) {
             let v = self.ssa_values[arg];
             self.set(
                 input,

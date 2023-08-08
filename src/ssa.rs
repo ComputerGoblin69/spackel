@@ -140,12 +140,6 @@ impl Iterator for ValueSequenceIter {
 pub struct ValueGenerator(u32);
 
 impl ValueGenerator {
-    pub fn new_value(&mut self) -> Value {
-        let value = self.0;
-        self.0 += 1;
-        Value(value)
-    }
-
     pub fn new_value_sequence(&mut self, count: u8) -> ValueSequence {
         let start = self.0;
         self.0 += u32::from(count);
@@ -155,7 +149,7 @@ impl ValueGenerator {
 
 #[derive(Clone, Debug)]
 pub struct Graph {
-    pub inputs: Vec<Value>,
+    pub inputs: ValueSequence,
     pub assignments: Vec<Assignment>,
     pub outputs: Vec<Value>,
 }
@@ -163,15 +157,13 @@ pub struct Graph {
 impl Graph {
     pub fn from_block(
         block: Box<Block<Generics>>,
-        input_count: u32,
+        input_count: u8,
         function_signatures: &HashMap<&str, FunctionSignature>,
         value_generator: &mut ValueGenerator,
     ) -> Self {
-        let inputs = std::iter::repeat_with(|| value_generator.new_value())
-            .take(input_count.try_into().unwrap())
-            .collect::<Vec<_>>();
+        let inputs = value_generator.new_value_sequence(input_count);
         let mut graph = Self {
-            inputs: inputs.clone(),
+            inputs,
             assignments: Vec::new(),
             outputs: Vec::new(),
         };
@@ -179,7 +171,7 @@ impl Graph {
             graph: &mut graph,
             function_signatures,
             value_generator,
-            stack: inputs,
+            stack: inputs.iter().collect(),
             renames: renaming::Renames::default(),
         };
         for instruction in block.into_vec() {
@@ -536,10 +528,7 @@ impl GraphBuilder<'_> {
                     self.drop(condition_value);
                     if condition {
                         self.renames.extend(
-                            body.inputs
-                                .iter()
-                                .copied()
-                                .zip(args.iter().copied()),
+                            body.inputs.iter().zip(args.iter().copied()),
                         );
                         for assignment in mem::take(&mut body.assignments) {
                             self.add(assignment);
@@ -562,9 +551,8 @@ impl GraphBuilder<'_> {
                 {
                     let body = if *condition { then } else { else_ };
                     self.drop(condition_value);
-                    self.renames.extend(
-                        body.inputs.iter().copied().zip(args.iter().copied()),
-                    );
+                    self.renames
+                        .extend(body.inputs.iter().zip(args.iter().copied()));
                     for assignment in mem::take(&mut body.assignments) {
                         self.add(assignment);
                     }
@@ -685,7 +673,6 @@ pub fn rebuild_graph_inlining(
                     .body
                     .inputs
                     .iter()
-                    .copied()
                     .zip(assignment.args.iter().copied()),
             );
             for mut assignment in function.body.assignments.iter().cloned() {
@@ -749,7 +736,7 @@ pub fn propagate_drops(graph: &mut Graph) {
     out.reverse();
 
     // Remove drops for values created by useless operations.
-    let mut produced = graph.inputs.iter().copied().collect::<HashSet<_>>();
+    let mut produced = graph.inputs.iter().collect::<HashSet<_>>();
     out.retain(|assignment| {
         produced.extend(assignment.to);
         assignment.args.iter().all(|arg| produced.contains(arg))
