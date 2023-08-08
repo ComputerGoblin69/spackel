@@ -1,4 +1,4 @@
-use crate::ssa::{GraphBuilder, Op, ValueGenerator};
+use crate::ssa::{Op, ValueGenerator};
 use petgraph::{prelude::DiGraph, Direction};
 use std::{collections::HashMap, convert::Infallible, ops::ControlFlow};
 
@@ -60,14 +60,11 @@ pub fn inline(graph: &mut CallGraph, value_generator: &mut ValueGenerator) {
             graph.neighbors_directed(node, Direction::Incoming).detach();
         while let Some(caller) = callers.next_node(graph) {
             let (function, caller) = graph.index_twice_mut(node, caller);
-            GraphBuilder {
-                graph: &mut caller.body,
-                function_signatures: &HashMap::new(),
+            crate::ssa::rebuild_graph_inlining(
+                &mut caller.body,
+                function,
                 value_generator,
-                stack: Vec::new(),
-                renames: crate::ssa::renaming::Renames::default(),
-            }
-            .rebuild_inlining(function);
+            );
         }
         // After inlining, the original function definition ends up unused, so
         // remove it.

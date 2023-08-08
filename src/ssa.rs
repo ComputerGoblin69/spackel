@@ -309,12 +309,12 @@ impl Op {
     }
 }
 
-pub struct GraphBuilder<'g> {
-    pub graph: &'g mut Graph,
-    pub function_signatures: &'g HashMap<String, FunctionSignature>,
-    pub value_generator: &'g mut ValueGenerator,
-    pub stack: Vec<Value>,
-    pub renames: renaming::Renames,
+struct GraphBuilder<'g> {
+    graph: &'g mut Graph,
+    function_signatures: &'g HashMap<String, FunctionSignature>,
+    value_generator: &'g mut ValueGenerator,
+    stack: Vec<Value>,
+    renames: renaming::Renames,
 }
 
 impl GraphBuilder<'_> {
@@ -670,42 +670,52 @@ impl GraphBuilder<'_> {
         }
         self.graph.assignments.push(Assignment { to, args, op });
     }
+}
 
-    pub fn rebuild_inlining(&mut self, function: &Function) {
-        for assignment in mem::take(&mut self.graph.assignments) {
-            if matches!(&assignment.op, Op::Call(name) if **name == *function.name)
-            {
-                self.renames.extend(
-                    function
-                        .body
-                        .inputs
-                        .iter()
-                        .copied()
-                        .zip(assignment.args.iter().copied()),
-                );
-                for mut assignment in function.body.assignments.iter().cloned()
-                {
-                    let new_out = self
-                        .value_generator
-                        .new_value_sequence(assignment.to.count());
-                    self.renames.extend(assignment.to.iter().zip(new_out));
-                    assignment.to = new_out;
-                    self.add(assignment);
-                }
-                let outputs = function
+pub fn rebuild_graph_inlining(
+    graph: &mut Graph,
+    function: &Function,
+    value_generator: &mut ValueGenerator,
+) {
+    let mut builder = GraphBuilder {
+        graph,
+        function_signatures: &HashMap::new(),
+        value_generator,
+        stack: Vec::new(),
+        renames: crate::ssa::renaming::Renames::default(),
+    };
+    for assignment in mem::take(&mut builder.graph.assignments) {
+        if matches!(&assignment.op, Op::Call(name) if **name == *function.name)
+        {
+            builder.renames.extend(
+                function
                     .body
-                    .outputs
+                    .inputs
                     .iter()
-                    .map(|&out| self.renames.take(out))
-                    .collect::<Vec<_>>();
-                self.renames.extend(assignment.to.iter().zip(outputs));
-            } else {
-                self.add(assignment);
+                    .copied()
+                    .zip(assignment.args.iter().copied()),
+            );
+            for mut assignment in function.body.assignments.iter().cloned() {
+                let new_out = builder
+                    .value_generator
+                    .new_value_sequence(assignment.to.count());
+                builder.renames.extend(assignment.to.iter().zip(new_out));
+                assignment.to = new_out;
+                builder.add(assignment);
             }
+            let outputs = function
+                .body
+                .outputs
+                .iter()
+                .map(|&out| builder.renames.take(out))
+                .collect::<Vec<_>>();
+            builder.renames.extend(assignment.to.iter().zip(outputs));
+        } else {
+            builder.add(assignment);
         }
-        for out in &mut self.graph.outputs {
-            *out = self.renames.take(*out);
-        }
+    }
+    for out in &mut builder.graph.outputs {
+        *out = builder.renames.take(*out);
     }
 }
 
