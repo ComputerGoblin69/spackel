@@ -185,11 +185,10 @@ impl Graph {
         for instruction in block.into_vec() {
             graph_builder.add_instruction(instruction);
         }
-        let mut renames = graph_builder.renames;
+        graph_builder
+            .renames
+            .apply_to_slice(&mut graph_builder.stack);
         graph.outputs = graph_builder.stack;
-        for out in &mut graph.outputs {
-            *out = renames.take(*out);
-        }
         graph
     }
 
@@ -525,9 +524,7 @@ impl GraphBuilder<'_> {
             mut op,
         }: Assignment,
     ) {
-        for arg in &mut *args {
-            *arg = self.renames.take(*arg);
-        }
+        self.renames.apply_to_slice(&mut args);
 
         match op {
             Op::Then(ref mut body) => {
@@ -547,9 +544,7 @@ impl GraphBuilder<'_> {
                         for assignment in mem::take(&mut body.assignments) {
                             self.add(assignment);
                         }
-                        for out in &mut body.outputs {
-                            *out = self.renames.take(*out);
-                        }
+                        self.renames.apply_to_slice(&mut body.outputs);
                         self.renames.extend(
                             to.iter().zip(body.outputs.iter().copied()),
                         );
@@ -573,9 +568,7 @@ impl GraphBuilder<'_> {
                     for assignment in mem::take(&mut body.assignments) {
                         self.add(assignment);
                     }
-                    for out in &mut body.outputs {
-                        *out = self.renames.take(*out);
-                    }
+                    self.renames.apply_to_slice(&mut body.outputs);
                     self.renames
                         .extend(to.iter().zip(body.outputs.iter().copied()));
                     return;
@@ -714,9 +707,7 @@ pub fn rebuild_graph_inlining(
             builder.add(assignment);
         }
     }
-    for out in &mut builder.graph.outputs {
-        *out = builder.renames.take(*out);
-    }
+    builder.renames.apply_to_slice(&mut builder.graph.outputs);
 }
 
 pub fn propagate_drops(graph: &mut Graph) {

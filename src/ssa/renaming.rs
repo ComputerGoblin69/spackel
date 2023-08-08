@@ -15,6 +15,12 @@ impl Renames {
         }
         value
     }
+
+    pub fn apply_to_slice(&mut self, slice: &mut [Value]) {
+        for value in slice {
+            *value = self.take(*value);
+        }
+    }
 }
 
 impl Extend<(Value, Value)> for Renames {
