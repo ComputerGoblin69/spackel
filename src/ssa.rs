@@ -30,13 +30,12 @@ pub fn convert<'src>(
                 .len()
                 .try_into()
                 .unwrap();
-            let mut body = Graph::from_block(
+            let body = Graph::from_block(
                 body,
                 input_count,
                 &program.function_signatures,
                 value_generator,
             );
-            propagate_drops(&mut body);
             (name, body)
         })
         .collect();
@@ -694,16 +693,17 @@ pub fn rebuild_graph_inlining(
     builder.renames.apply_to_slice(&mut builder.graph.outputs);
 }
 
-pub fn propagate_drops(graph: &mut Graph) {
+pub fn propagate_drops(graph: &mut Graph) -> bool {
+    let mut did_something = false;
+
     // Recurse.
     for assignment in &mut graph.assignments {
-        match &mut assignment.op {
+        did_something |= match &mut assignment.op {
             Op::Then(body) | Op::Repeat(body) => propagate_drops(body),
             Op::ThenElse(then, else_) => {
-                propagate_drops(then);
-                propagate_drops(else_);
+                propagate_drops(then) || propagate_drops(else_)
             }
-            _ => {}
+            _ => false,
         }
     }
 
@@ -716,6 +716,7 @@ pub fn propagate_drops(graph: &mut Graph) {
                 .iter()
                 .all(|res| useless_values.contains(&res))
         {
+            did_something |= !matches!(assignment.op, Op::Drop);
             // If the values produced by a pure operation are all useless then the
             // arguments are also useless.
             useless_values.extend(assignment.args.iter().copied());
@@ -740,4 +741,6 @@ pub fn propagate_drops(graph: &mut Graph) {
     });
 
     graph.assignments = out;
+
+    did_something
 }

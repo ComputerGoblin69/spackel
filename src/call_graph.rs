@@ -38,7 +38,17 @@ pub fn of(mut function_bodies: HashMap<&str, crate::ssa::Graph>) -> CallGraph {
     )
 }
 
-pub fn inline(graph: &mut CallGraph, value_generator: &mut ValueGenerator) {
+pub fn optimize(graph: &mut CallGraph, value_generator: &mut ValueGenerator) {
+    while graph
+        .node_weights_mut()
+        .any(|function| crate::ssa::propagate_drops(&mut function.body))
+        | inline(graph, value_generator)
+    {}
+}
+
+fn inline(graph: &mut CallGraph, value_generator: &mut ValueGenerator) -> bool {
+    let mut did_something = false;
+
     // Find a function to inline.
     while let Some(node) = graph
         // Only inline leaf functions.
@@ -54,6 +64,8 @@ pub fn inline(graph: &mut CallGraph, value_generator: &mut ValueGenerator) {
             || graph.edges(node).nth(1).is_none())
         })
     {
+        did_something = true;
+
         let mut callers =
             graph.neighbors_directed(node, Direction::Incoming).detach();
         while let Some(caller) = callers.next_node(graph) {
@@ -68,4 +80,6 @@ pub fn inline(graph: &mut CallGraph, value_generator: &mut ValueGenerator) {
         // remove it.
         graph.remove_node(node);
     }
+
+    did_something
 }
