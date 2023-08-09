@@ -60,6 +60,12 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
             let mut graph = call_graph::of(program.function_bodies);
             call_graph::inline(&mut graph, &mut value_generator);
 
+            if std::env::var_os("SPACKEL_PRINT_SSA").is_some() {
+                for function in graph.node_weights() {
+                    eprintln!("{}: {:#?}", function.name, function.body);
+                }
+            }
+
             let target_triple = std::env::var("SPACKEL_TARGET");
             let compilation_options = compiler::Options {
                 target_triple: target_triple

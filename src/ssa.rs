@@ -37,9 +37,6 @@ pub fn convert<'src>(
                 value_generator,
             );
             propagate_drops(&mut body);
-            if std::env::var_os("SPACKEL_PRINT_SSA").is_some() {
-                eprintln!("{name}: {body:#?}");
-            }
             (name, body)
         })
         .collect();
