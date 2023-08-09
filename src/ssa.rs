@@ -1,4 +1,4 @@
-pub mod renaming;
+mod renaming;
 
 use crate::{
     call_graph::Function,
