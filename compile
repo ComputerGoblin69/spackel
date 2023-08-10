@@ -4,4 +4,4 @@ set -eu
 
 cargo run --quiet compile "$1"
 make --quiet
-cc -o main runtime.o main.o
+cc -o main runtime.o main.o -Wl,--gc-sections
