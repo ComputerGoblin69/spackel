@@ -77,28 +77,8 @@ fn check_function_signature(
     name: &str,
     function: &Function,
 ) -> Result<FunctionSignature> {
-    let parameters = function
-        .parameters
-        .iter()
-        .map(|(param, span)| match param {
-            Instruction::PushType(typ) => Ok(typ.clone()),
-            _ => Err(diagnostics::error(
-                "unsupported instruction in function signature".to_owned(),
-                vec![primary_label(*span, "")],
-            )),
-        })
-        .collect::<Result<Box<_>, _>>()?;
-    let returns = function
-        .returns
-        .iter()
-        .map(|(param, span)| match param {
-            Instruction::PushType(typ) => Ok(typ.clone()),
-            _ => Err(diagnostics::error(
-                "unsupported instruction in function signature".to_owned(),
-                vec![primary_label(*span, "")],
-            )),
-        })
-        .collect::<Result<Box<_>, _>>()?;
+    let parameters = check_type_stack(&function.parameters)?;
+    let returns = check_type_stack(&function.returns)?;
 
     if name == "main" {
         ensure!(
@@ -115,6 +95,20 @@ fn check_function_signature(
         parameters,
         returns,
     })
+}
+
+fn check_type_stack(instructions: &Block<Span>) -> Result<Box<[Type]>> {
+    instructions
+        .iter()
+        .map(|(param, span)| match param {
+            Instruction::PushType(typ) => Ok(typ.clone()),
+            _ => Err(diagnostics::error(
+                "unsupported instruction in function signature".to_owned(),
+                vec![primary_label(*span, "")],
+            )
+            .into()),
+        })
+        .collect::<Result<Box<_>>>()
 }
 
 struct Checker<'src> {
