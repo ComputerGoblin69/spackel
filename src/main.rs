@@ -8,6 +8,7 @@ mod formatter;
 mod interpreter;
 mod ir;
 mod lexer;
+mod parser;
 mod ssa;
 mod typ;
 
@@ -42,7 +43,7 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
                 .context("failed to read source file")?;
             let file = code_map.add_file(source_path, source_code);
 
-            let program = ir::Program::parse(&file)?;
+            let program = parser::parse(&file)?;
             let program = typ::check(program)?;
             interpreter::interpret(&program);
             Ok(())
@@ -53,7 +54,7 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
                 .context("failed to read source file")?;
             let file = code_map.add_file(source_path, source_code);
 
-            let program = ir::Program::parse(&file)?;
+            let program = parser::parse(&file)?;
             let program = typ::check(program)?;
             let mut value_generator = ssa::ValueGenerator::default();
             let program = ssa::convert(program, &mut value_generator);
