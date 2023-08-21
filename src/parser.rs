@@ -201,6 +201,7 @@ fn instructions_until_terminator<'a>(
 
     Ok((instructions, terminator))
 }
+
 fn parse_function<'a>(
     mut tokens: &mut impl Iterator<Item = Token<'a>>,
     token: Token,
