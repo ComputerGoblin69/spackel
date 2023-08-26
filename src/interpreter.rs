@@ -1,5 +1,5 @@
 use crate::{
-    ir::{BinLogicOp, BinMathOp, Comparison, Instruction},
+    ir::{BinLogicOp, BinMathOp, Block, Comparison, Instruction},
     typ::{Generics, Type},
 };
 
@@ -34,7 +34,11 @@ impl Interpreter<'_> {
     }
 
     fn interpret(&mut self) {
-        for instruction in &*self.program.function_bodies["main"] {
+        self.interpret_block(&self.program.function_bodies["main"]);
+    }
+
+    fn interpret_block(&mut self, block: &Block<Generics>) {
+        for instruction in block {
             self.interpret_instruction(instruction);
         }
     }
@@ -73,36 +77,24 @@ impl Interpreter<'_> {
     ) {
         match instruction {
             Instruction::Call(name) => {
-                for instruction in &*self.program.function_bodies[&**name] {
-                    self.interpret_instruction(instruction);
-                }
+                self.interpret_block(&self.program.function_bodies[&**name]);
             }
             Instruction::Then(body) => {
                 if self.pop_bool() {
-                    for instruction in &**body {
-                        self.interpret_instruction(instruction);
-                    }
+                    self.interpret_block(body);
                 }
             }
             Instruction::ThenElse(then, else_) => {
-                for instruction in &**if self.pop_bool() { then } else { else_ }
-                {
-                    self.interpret_instruction(instruction);
-                }
+                let block = if self.pop_bool() { then } else { else_ };
+                self.interpret_block(block);
             }
             Instruction::Repeat { body, .. } => {
                 while {
-                    for instruction in &**body {
-                        self.interpret_instruction(instruction);
-                    }
+                    self.interpret_block(body);
                     self.pop_bool()
                 } {}
             }
-            Instruction::Unsafe(body) => {
-                for instruction in &**body {
-                    self.interpret_instruction(instruction);
-                }
-            }
+            Instruction::Unsafe(body) => self.interpret_block(body),
             Instruction::PushI32(number) => self.push(Value::I32(*number)),
             Instruction::PushF32(number) => self.push(Value::F32(*number)),
             Instruction::PushBool(b) => self.push(Value::Bool(*b)),
