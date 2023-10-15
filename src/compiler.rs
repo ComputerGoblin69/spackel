@@ -64,7 +64,7 @@ pub fn compile(
                 object_module.declare_anonymous_function(signature)
             }
             .unwrap();
-            (name.clone(), func_id)
+            (name, func_id)
         })
         .collect();
 
