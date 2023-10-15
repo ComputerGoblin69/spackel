@@ -232,10 +232,10 @@ fn parse_function<'a>(
 
     let mut instructions_until_specific_terminator = |terminator| {
         let (instructions, Some(t)) =
-                instructions_until_terminator(&mut tokens)?
-            else {
-                bail!(unterminated("function definition", token));
-            };
+            instructions_until_terminator(&mut tokens)?
+        else {
+            bail!(unterminated("function definition", token));
+        };
         ensure!(
             &*t == terminator,
             unexpected_token(
