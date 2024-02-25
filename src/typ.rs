@@ -15,6 +15,7 @@ pub enum Type {
     Bool,
     I32,
     F32,
+    #[allow(clippy::enum_variant_names)]
     Type,
     Ptr(Box<Self>),
 }
