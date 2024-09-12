@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![deny(clippy::allow_attributes, clippy::allow_attributes_without_reason)]
 #![warn(clippy::nursery, clippy::pedantic)]
 
 mod call_graph;
@@ -19,7 +20,7 @@ use std::{path::Path, process::ExitCode};
 fn main() -> Result<ExitCode> {
     let mut code_map = CodeMap::new();
 
-    #[allow(clippy::option_if_let_else)] // `else` consumes `err`
+    #[expect(clippy::option_if_let_else, reason = "`else` consumes `err`")]
     real_main(&mut code_map)
         .map(|()| ExitCode::SUCCESS)
         .or_else(|err| {

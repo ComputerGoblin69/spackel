@@ -90,7 +90,7 @@ impl From<Token<'_>> for Instruction {
             "tuck" => Self::Tuck,
             _ =>
             {
-                #[allow(clippy::option_if_let_else)]
+                #[expect(clippy::option_if_let_else, reason = "less readable")]
                 if let Ok(number) = token.parse::<i32>() {
                     Self::PushI32(number)
                 } else if let Ok(number) = token.parse::<f32>() {

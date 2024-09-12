@@ -115,7 +115,10 @@ impl Interpreter<'_> {
             }
             Instruction::Print => print!("{}", self.pop_i32()),
             Instruction::Println => println!("{}", self.pop_i32()),
-            #[allow(clippy::cast_sign_loss)]
+            #[expect(
+                clippy::cast_sign_loss,
+                reason = "Spackel doesn't have an unsigned integer type"
+            )]
             Instruction::PrintChar => print!(
                 "{}",
                 (self.pop_i32() as u32)
