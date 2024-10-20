@@ -66,7 +66,7 @@ impl From<Token<'_>> for Instruction {
             "÷" => Self::BinMathOp(BinMathOp::Div),
             "%" => Self::BinMathOp(BinMathOp::Rem),
             "+🤡" => Self::BinMathOp(BinMathOp::SillyAdd),
-            "sqrt" => Self::Sqrt,
+            "√" => Self::Sqrt,
             "<" => Self::Comparison(Comparison::Lt),
             "≤" => Self::Comparison(Comparison::Le),
             "=" => Self::Comparison(Comparison::Eq),

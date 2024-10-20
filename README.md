@@ -141,7 +141,7 @@ end
     - $10+9 = 21$
     - $1+1 = 1$
 
-- `sqrt`: square root.
+- `sqrt` or `√`: square root.
 
 ### Comparisons
 

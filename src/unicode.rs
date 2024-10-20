@@ -12,6 +12,7 @@ pub fn prettify_token(token: &str) -> &str {
         "nand" => "⊼",
         "nor" => "⊽",
         "xnor" => "⊙",
+        "sqrt" => "√",
         _ => token,
     }
 }
