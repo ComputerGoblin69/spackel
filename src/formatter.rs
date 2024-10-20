@@ -42,10 +42,10 @@ impl Formatter {
         }
         if token != "\n" {
             if self.output.ends_with('\n') {
-                self.output.extend(
-                    std::iter::repeat(' ')
-                        .take(self.indentation * INDENT_WIDTH),
-                );
+                self.output.extend(std::iter::repeat_n(
+                    ' ',
+                    self.indentation * INDENT_WIDTH,
+                ));
             } else if self.output.ends_with(|c: char| !c.is_whitespace()) {
                 self.output.push(' ');
             }
