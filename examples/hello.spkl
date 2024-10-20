@@ -1,4 +1,4 @@
-fn main : -> do
+fn main : → do
   72 print-char
   101 print-char
   108 print-char

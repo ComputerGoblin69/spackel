@@ -1,4 +1,4 @@
-use crate::{lexer::Token, typ::Type};
+use crate::{lexer::Token, typ::Type, unicode::prettify_token};
 use codemap::Span;
 use std::collections::HashMap;
 
@@ -49,7 +49,7 @@ pub enum Instruction<T = Span> {
 
 impl From<Token<'_>> for Instruction {
     fn from(token: Token) -> Self {
-        match &*token {
+        match prettify_token(token.text) {
             "true" => Self::PushBool(true),
             "false" => Self::PushBool(false),
             "i32" => Self::PushType(Type::I32),
@@ -62,16 +62,16 @@ impl From<Token<'_>> for Instruction {
             "print-char" => Self::PrintChar,
             "+" => Self::BinMathOp(BinMathOp::Add),
             "-" => Self::BinMathOp(BinMathOp::Sub),
-            "*" => Self::BinMathOp(BinMathOp::Mul),
-            "/" => Self::BinMathOp(BinMathOp::Div),
+            "×" => Self::BinMathOp(BinMathOp::Mul),
+            "÷" => Self::BinMathOp(BinMathOp::Div),
             "%" => Self::BinMathOp(BinMathOp::Rem),
             "+🤡" => Self::BinMathOp(BinMathOp::SillyAdd),
             "sqrt" => Self::Sqrt,
             "<" => Self::Comparison(Comparison::Lt),
-            "<=" => Self::Comparison(Comparison::Le),
+            "≤" => Self::Comparison(Comparison::Le),
             "=" => Self::Comparison(Comparison::Eq),
             ">" => Self::Comparison(Comparison::Ge),
-            ">=" => Self::Comparison(Comparison::Gt),
+            "≥" => Self::Comparison(Comparison::Gt),
             "not" => Self::Not,
             "and" => Self::BinLogicOp(BinLogicOp::And),
             "or" => Self::BinLogicOp(BinLogicOp::Or),

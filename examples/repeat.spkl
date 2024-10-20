@@ -1,11 +1,11 @@
 # Prints the even numbers between 30 and 40.
 
-fn main : -> do
+fn main : → do
   30
   repeat
     dup println
     2 +
-    dup 40 <=
+    dup 40 ≤
   end
   drop
 end

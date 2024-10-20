@@ -1,12 +1,12 @@
 macro double
-  2 *
+  2 ×
 end
 
 macro quadruple
   double double
 end
 
-fn main : -> do
+fn main : → do
   1 double println
   5 double double println
   -99 double println

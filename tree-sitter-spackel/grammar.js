@@ -48,7 +48,7 @@ module.exports = grammar({
       ),
 
     function_signature: $ =>
-      seq(repeat($._instruction), "->", repeat($._instruction)),
+      seq(repeat($._instruction), choice("->", "→"), repeat($._instruction)),
 
     block: $ => seq("do", repeat($._instruction), "end"),
 

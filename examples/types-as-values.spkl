@@ -1,6 +1,6 @@
 # Types are values:
 
-fn main : -> do
+fn main : → do
   i32
   dup
   true type-of

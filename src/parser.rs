@@ -2,6 +2,7 @@ use crate::{
     diagnostics::{self, primary_label, secondary_label},
     ir::{Block, Function, Instruction, Program},
     lexer::{lex, Token},
+    unicode::prettify_token,
 };
 use anyhow::{bail, ensure, Result};
 use codemap::Span;
@@ -130,8 +131,8 @@ fn instructions_until_terminator<'a>(
         let Some(token) = tokens.next() else {
             return Ok(None);
         };
-        Ok(Some(match &*token {
-            "end" | "else" | "do" | ":" | "->" => {
+        Ok(Some(match prettify_token(token.text) {
+            "end" | "else" | "do" | ":" | "→" => {
                 terminator = Some(token);
                 return Ok(None);
             }
@@ -237,7 +238,7 @@ fn parse_function<'a>(
             bail!(unterminated("function definition", token));
         };
         ensure!(
-            &*t == terminator,
+            prettify_token(t.text) == terminator,
             unexpected_token(
                 t,
                 format!("expected instruction or `{terminator}`")
@@ -246,7 +247,7 @@ fn parse_function<'a>(
         Ok((instructions, t))
     };
 
-    let parameters = instructions_until_specific_terminator("->")?.0;
+    let parameters = instructions_until_specific_terminator("→")?.0;
     let returns = instructions_until_specific_terminator("do")?.0;
     let (body, end) = instructions_until_specific_terminator("end")?;
 
@@ -264,7 +265,7 @@ fn parse_function<'a>(
 
 fn is_keyword(token: &str) -> bool {
     matches!(
-        token,
+        prettify_token(token),
         "macro"
             | "then"
             | "else"
@@ -273,7 +274,7 @@ fn is_keyword(token: &str) -> bool {
             | "do"
             | "fn"
             | ":"
-            | "->"
+            | "→"
             | "unsafe"
     )
 }

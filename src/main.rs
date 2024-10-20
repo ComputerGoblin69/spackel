@@ -12,6 +12,7 @@ mod lexer;
 mod parser;
 mod ssa;
 mod typ;
+mod unicode;
 
 use anyhow::{bail, ensure, Context, Result};
 use codemap::CodeMap;

@@ -1,3 +1,5 @@
+use crate::unicode::prettify_token;
+
 const INDENT_WIDTH: usize = 2;
 
 pub fn format(source_code: &str) -> String {
@@ -5,7 +7,7 @@ pub fn format(source_code: &str) -> String {
         output: String::new(),
         indentation: 0,
     };
-    for token in lex_including_trivia(source_code) {
+    for token in lex_including_trivia(source_code).map(prettify_token) {
         formatter.emit_token(token);
     }
     if formatter.output.ends_with("\n\n") {

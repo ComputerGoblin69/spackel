@@ -1,6 +1,6 @@
 # Prints the integers from 0 to 9.
 
-fn recurse : i32 -> do
+fn recurse : i32 → do
   dup 10 < then
     dup println
     1 + recurse
@@ -9,6 +9,6 @@ fn recurse : i32 -> do
   end
 end
 
-fn main : -> do
+fn main : → do
   0 recurse
 end

@@ -1,10 +1,10 @@
 # Prints the first 11 numbers of the Fibonacci series, starting at 0 1.
 
-fn iterate : i32 i32 -> i32 i32 do
+fn iterate : i32 i32 → i32 i32 do
   over println tuck +
 end
 
-fn main : -> do
+fn main : → do
   0 1
   iterate
   iterate

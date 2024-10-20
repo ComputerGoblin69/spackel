@@ -1,10 +1,10 @@
 # For each integer between 0 and 4, prints E if it's even or O if it's odd.
 
-fn even : i32 -> bool do
+fn even : i32 → bool do
   2 % 0 =
 end
 
-fn case : i32 -> do
+fn case : i32 → do
   even then
     69 print-char # E
   else
@@ -12,7 +12,7 @@ fn case : i32 -> do
   end
 end
 
-fn main : -> do
+fn main : → do
   0 case
   1 case
   2 case

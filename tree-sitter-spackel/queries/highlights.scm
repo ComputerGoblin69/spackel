@@ -22,7 +22,10 @@
 "fn" @keyword.function
 
 ":" @punctuation.delimiter
-"->" @operator
+[
+  "->"
+  "→"
+] @operator
 
 (macro_definition
   name: (word) @function.macro)
@@ -32,7 +35,7 @@
 
 (
  (word) @function.builtin
- (#match? @function.builtin "^(print|println|print-char|\\+|-|\\*|/|%|ß|sqrt|<|<=|=|>|>=|not|and|or|xor|nand|nor|xnor|addr-of|read-ptr|drop|dup|swap|over|nip|tuck|type-of)$")
+ (#match? @function.builtin "^(print|println|print-char|\\+|-|\\*|×|/|÷|%|ß|sqrt|<|<=|≤|=|>|>=|≥|not|and|or|xor|nand|nor|xnor|addr-of|read-ptr|drop|dup|swap|over|nip|tuck|type-of)$")
 )
 
 (

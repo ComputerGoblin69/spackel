@@ -1,5 +1,5 @@
-# Prints the golden ratio φ, equal to (1 + √5) / 2.
+# Prints the golden ratio φ, equal to (1 + √5) ÷ 2.
 
-fn main : -> do
-  1.0 5.0 sqrt + 2.0 / println
+fn main : → do
+  1.0 5.0 sqrt + 2.0 ÷ println
 end

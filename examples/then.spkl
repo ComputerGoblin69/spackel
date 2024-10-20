@@ -1,15 +1,15 @@
-fn even : i32 -> bool do
+fn even : i32 → bool do
   2 % 0 =
 end
 
-fn case : i32 -> do
+fn case : i32 → do
   dup even then
     dup println
   end
   drop
 end
 
-fn main : -> do
+fn main : → do
   0 case
   1 case
   2 case
