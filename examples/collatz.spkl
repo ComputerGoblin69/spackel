@@ -9,7 +9,7 @@ fn main : → do
     repeat
       32 print-char # space
       dup print
-      dup 1 = not tuck then
+      dup 1 = ¬ tuck then
         dup 2 % 0 = then
           2 ÷
         else

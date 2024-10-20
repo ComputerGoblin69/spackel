@@ -5,6 +5,13 @@ pub fn prettify_token(token: &str) -> &str {
         "/" => "÷",
         "<=" => "≤",
         ">=" => "≥",
+        "not" => "¬",
+        "and" => "∧",
+        "or" => "∨",
+        "xor" => "⊕",
+        "nand" => "⊼",
+        "nor" => "⊽",
+        "xnor" => "⊙",
         _ => token,
     }
 }

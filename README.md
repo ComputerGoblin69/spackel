@@ -153,13 +153,13 @@ end
 
 ### Boolean logic
 
-- `not`
-- `and`
-- `or`
-- `xor`
-- `nand`: equivalent to `and not`.
-- `nor`: equivalent to `or not`.
-- `xnor`: equivalent to `xor not`.
+- `not` or `¬`
+- `and` or `∧`
+- `or` or `∨`
+- `xor` or `⊕`
+- `nand` or `⊼`: equivalent to `∧ ¬`.
+- `nor` or `⊽`: equivalent to `∨ ¬`.
+- `xnor` or `⊙`: equivalent to `⊕ ¬`.
 
 ### Stack manipulation
 
