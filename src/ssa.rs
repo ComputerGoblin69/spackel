@@ -643,6 +643,14 @@ impl GraphBuilder<'_> {
                     return;
                 }
             }
+            Op::Not => {
+                if let Some(Op::Bool(operand)) = self.graph.source_op(args[0]) {
+                    let res = !*operand;
+                    self.drop(args[0]);
+                    self.bool(to + 0, res);
+                    return;
+                }
+            }
             _ => {}
         }
         self.graph.assignments.push(Assignment { to, args, op });
