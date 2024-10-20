@@ -91,7 +91,7 @@ Functions are defined as follows, where `input-N` are the types of the
 parameters and `output-N` are the types of the returned values:
 
 ```spackel
-fn function-name : input-1 input-2 -> output-1 output-2 do
+fn function-name : input-1 input-2 → output-1 output-2 do
   # ...
 end
 ```
@@ -110,7 +110,7 @@ memory unsafety, certain instructions are marked as `unsafe` and can only be
 used inside of `unsafe` blocks:
 
 ```spackel
-fn main : -> do
+fn main : → do
   unsafe
     # Doing some horribly unsafe things.
     # Compiler, I promise that I know what I'm doing.
@@ -132,8 +132,8 @@ end
 - Binary operators (these take two numbers as arguments and produce one number):
   - `+`: addition.
   - `-`: subtraction.
-  - `*`: multiplication.
-  - `/`: division.
+  - `*` or `×`: multiplication.
+  - `/` or `÷`: division.
   - `%`: remainder after division. This is *not* the same as modulo when
     negative numbers are involved.
   - `+🤡`: silly addition. This is like regular addition with some exceptions:
@@ -146,9 +146,9 @@ end
 ### Comparisons
 
 - `<`: less than.
-- `<=`: less than or equal.
+- `<=` or `≤`: less than or equal.
 - `=`: equal.
-- `>=`: greater than or equal.
+- `>=` or `≥`: greater than or equal.
 - `>`: greater than.
 
 ### Boolean logic
