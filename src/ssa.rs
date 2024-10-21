@@ -294,6 +294,14 @@ impl Op {
                 | Self::BinMath { typ: Some(Type::I32), .. }
         )
     }
+
+    const fn as_bool(&self) -> Option<bool> {
+        if let Self::Bool(v) = *self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 struct GraphBuilder<'g> {
@@ -648,17 +656,27 @@ impl GraphBuilder<'_> {
                 }
             }
             Op::BinLogic(operation) => {
-                let a = self.graph.source_op(args[0]);
-                let b = self.graph.source_op(args[1]);
-                if let (Some(Op::Bool(a)), Some(Op::Bool(b))) = (a, b) {
-                    let res = match operation {
-                        BinLogicOp::And => *a && *b,
-                        BinLogicOp::Or => *a || *b,
-                        BinLogicOp::Xor => *a != *b,
-                        BinLogicOp::Nand => !(*a && *b),
-                        BinLogicOp::Nor => !(*a || *b),
-                        BinLogicOp::Xnor => *a == *b,
-                    };
+                use BinLogicOp as B;
+
+                let a = self.graph.source_op(args[0]).and_then(Op::as_bool);
+                let b = self.graph.source_op(args[1]).and_then(Op::as_bool);
+                if let Some(res) = match (operation, a, b) {
+                    (B::And, None, Some(false))
+                    | (B::And, Some(false), None)
+                    | (B::Nor, None, Some(true))
+                    | (B::Nor, Some(true), None) => Some(false),
+                    (B::And, Some(a), Some(b)) => Some(a && b),
+                    (B::Or, None, Some(true))
+                    | (B::Or, Some(true), None)
+                    | (B::Nand, None, Some(false))
+                    | (B::Nand, Some(false), None) => Some(true),
+                    (B::Or, Some(a), Some(b)) => Some(a || b),
+                    (B::Xor, Some(a), Some(b)) => Some(a != b),
+                    (B::Nand, Some(a), Some(b)) => Some(!(a && b)),
+                    (B::Nor, Some(a), Some(b)) => Some(!(a || b)),
+                    (B::Xnor, Some(a), Some(b)) => Some(a == b),
+                    _ => None,
+                } {
                     self.drop(args[0]);
                     self.drop(args[1]);
                     self.bool(to + 0, res);
