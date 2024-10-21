@@ -121,7 +121,7 @@ impl Compiler<'_> {
                     panic!("extern function `{func_name}` missing signature");
                 };
                 self.object_module
-                    .declare_function(func_name, Linkage::Import, signature)
+                    .declare_function(func_name, Linkage::Hidden, signature)
                     .unwrap()
             });
         let func_ref =
