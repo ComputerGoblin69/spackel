@@ -48,7 +48,7 @@ impl Formatter {
                     ' ',
                     self.indentation * INDENT_WIDTH,
                 ));
-            } else if self.output.ends_with(|c: char| !c.is_whitespace()) {
+            } else if self.output.ends_with(|c| c != ' ') {
                 self.output.push(' ');
             }
         }
