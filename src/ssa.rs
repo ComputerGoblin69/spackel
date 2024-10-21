@@ -610,11 +610,7 @@ impl GraphBuilder<'_> {
                     };
                     self.drop(args[0]);
                     self.drop(args[1]);
-                    self.add(Assignment {
-                        to,
-                        args: [].into(),
-                        op: Op::F32(res),
-                    });
+                    self.f32(to + 0, res);
                     return;
                 }
             }
