@@ -21,15 +21,11 @@ use std::{path::Path, process::ExitCode};
 fn main() -> Result<ExitCode> {
     let mut code_map = CodeMap::new();
 
-    #[expect(clippy::option_if_let_else, reason = "`else` consumes `err`")]
     real_main(&mut code_map)
         .map(|()| ExitCode::SUCCESS)
         .or_else(|err| {
-            if let Some(diagnostic) = err.downcast_ref::<diagnostics::Error>() {
-                Ok(diagnostic.emit(&code_map))
-            } else {
-                Err(err)
-            }
+            err.downcast::<diagnostics::Error>()
+                .map(|diagnostic| diagnostic.emit(&code_map))
         })
 }
 
