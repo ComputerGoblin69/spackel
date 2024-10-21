@@ -647,6 +647,24 @@ impl GraphBuilder<'_> {
                     return;
                 }
             }
+            Op::BinLogic(operation) => {
+                let a = self.graph.source_op(args[0]);
+                let b = self.graph.source_op(args[1]);
+                if let (Some(Op::Bool(a)), Some(Op::Bool(b))) = (a, b) {
+                    let res = match operation {
+                        BinLogicOp::And => *a && *b,
+                        BinLogicOp::Or => *a || *b,
+                        BinLogicOp::Xor => *a != *b,
+                        BinLogicOp::Nand => !(*a && *b),
+                        BinLogicOp::Nor => !(*a || *b),
+                        BinLogicOp::Xnor => *a == *b,
+                    };
+                    self.drop(args[0]);
+                    self.drop(args[1]);
+                    self.bool(to + 0, res);
+                    return;
+                }
+            }
             _ => {}
         }
         self.graph.assignments.push(Assignment { to, args, op });
