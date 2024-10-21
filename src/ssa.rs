@@ -170,7 +170,7 @@ impl Graph {
             stack: inputs.iter().collect(),
             renames: renaming::Renames::default(),
         };
-        for instruction in block.into_vec() {
+        for instruction in block {
             graph_builder.add_instruction(instruction);
         }
         graph_builder
@@ -372,7 +372,7 @@ impl GraphBuilder<'_> {
                 )
             }
             Instruction::Unsafe(body) => {
-                for instruction in body.into_vec() {
+                for instruction in body {
                     self.add_instruction(instruction);
                 }
                 return;
@@ -406,22 +406,18 @@ impl GraphBuilder<'_> {
             Instruction::Sqrt => (1, 1, Op::Sqrt),
             Instruction::TypeOf => (1, 1, Op::TypeOf),
             Instruction::Ptr => (1, 1, Op::Ptr),
-            Instruction::AddrOf => (
-                1,
-                1,
-                Op::AddrOf(generics.into_vec().into_iter().next().unwrap()),
-            ),
-            Instruction::ReadPtr => (
-                1,
-                1,
-                Op::ReadPtr(generics.into_vec().into_iter().next().unwrap()),
-            ),
+            Instruction::AddrOf => {
+                (1, 1, Op::AddrOf(Box::into_iter(generics).next().unwrap()))
+            }
+            Instruction::ReadPtr => {
+                (1, 1, Op::ReadPtr(Box::into_iter(generics).next().unwrap()))
+            }
             Instruction::BinMathOp(operation) => (
                 1,
                 2,
                 Op::BinMath {
                     operation,
-                    typ: generics.into_vec().into_iter().next(),
+                    typ: Box::into_iter(generics).next(),
                 },
             ),
             Instruction::Comparison(comparison) => {
@@ -449,7 +445,7 @@ impl GraphBuilder<'_> {
                 self.stack.swap(a, b);
                 self.add_instruction((
                     Instruction::Dup,
-                    Box::new([generics.into_vec().into_iter().next().unwrap()]),
+                    Box::new([Box::into_iter(generics).next().unwrap()]),
                 ));
                 let a = self.stack.len() - 3;
                 let b = self.stack.len() - 2;
@@ -459,7 +455,7 @@ impl GraphBuilder<'_> {
             Instruction::Tuck => {
                 self.add_instruction((
                     Instruction::Dup,
-                    Box::new([generics.into_vec().into_iter().nth(1).unwrap()]),
+                    Box::new([Box::into_iter(generics).nth(1).unwrap()]),
                 ));
                 let a = self.stack.len() - 2;
                 let new_a = self.stack.len() - 1;

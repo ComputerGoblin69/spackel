@@ -141,10 +141,7 @@ impl<'src> Checker<'src> {
         function: Function,
     ) -> Result<Box<Block<Generics>>> {
         self.stack = self.function_signatures[name].parameters.to_vec();
-        let body = function
-            .body
-            .into_vec()
-            .into_iter()
+        let body = Box::into_iter(function.body)
             .map(|instruction| self.check_instruction(instruction))
             .collect::<Result<_>>()?;
 
@@ -326,9 +323,7 @@ impl<'src> Checker<'src> {
         let instruction = match instruction {
             Instruction::Then(body) => {
                 let before = self.stack.clone();
-                let body = body
-                    .into_vec()
-                    .into_iter()
+                let body = Box::into_iter(body)
                     .map(|instruction| self.check_instruction(instruction))
                     .collect::<Result<_>>()?;
                 ensure!(
@@ -346,15 +341,11 @@ impl<'src> Checker<'src> {
             }
             Instruction::ThenElse(then, else_) => {
                 let before = self.stack.clone();
-                let then = then
-                    .into_vec()
-                    .into_iter()
+                let then = Box::into_iter(then)
                     .map(|instruction| self.check_instruction(instruction))
                     .collect::<Result<_>>()?;
                 let then_types = std::mem::replace(&mut self.stack, before);
-                let else_ = else_
-                    .into_vec()
-                    .into_iter()
+                let else_ = Box::into_iter(else_)
                     .map(|instruction| self.check_instruction(instruction))
                     .collect::<Result<_>>()?;
                 ensure!(
@@ -372,9 +363,7 @@ impl<'src> Checker<'src> {
             }
             Instruction::Repeat { body, end_span } => {
                 let before = self.stack.clone();
-                let body = body
-                    .into_vec()
-                    .into_iter()
+                let body = Box::into_iter(body)
                     .map(|instruction| self.check_instruction(instruction))
                     .collect::<Result<_>>()?;
                 self.transform(&[], &[C(Bool)], &[], end_span)?;
@@ -393,9 +382,7 @@ impl<'src> Checker<'src> {
             }
             Instruction::Unsafe(body) => {
                 self.unsafe_layers += 1;
-                let body = body
-                    .into_vec()
-                    .into_iter()
+                let body = Box::into_iter(body)
                     .map(|instruction| self.check_instruction(instruction))
                     .collect::<Result<_>>()?;
                 self.unsafe_layers -= 1;
