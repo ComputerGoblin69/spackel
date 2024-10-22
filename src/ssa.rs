@@ -7,14 +7,14 @@ use crate::{
 };
 use itertools::Itertools;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     fmt, mem,
     ops::{ControlFlow, Range},
 };
 
 pub struct Program<'src> {
-    pub function_signatures: HashMap<&'src str, FunctionSignature>,
-    pub function_bodies: HashMap<&'src str, Graph>,
+    pub function_signatures: BTreeMap<&'src str, FunctionSignature>,
+    pub function_bodies: BTreeMap<&'src str, Graph>,
 }
 
 pub fn convert<'src>(
@@ -46,7 +46,7 @@ pub fn convert<'src>(
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Value(u32);
 
 impl fmt::Debug for Value {
@@ -154,7 +154,7 @@ impl Graph {
     pub fn from_block(
         block: Box<Block<Generics>>,
         input_count: u8,
-        function_signatures: &HashMap<&str, FunctionSignature>,
+        function_signatures: &BTreeMap<&str, FunctionSignature>,
         value_generator: &mut ValueGenerator,
     ) -> Self {
         let inputs = value_generator.new_value_sequence(input_count);
@@ -306,7 +306,7 @@ impl Op {
 
 struct GraphBuilder<'g> {
     graph: &'g mut Graph,
-    function_signatures: &'g HashMap<&'g str, FunctionSignature>,
+    function_signatures: &'g BTreeMap<&'g str, FunctionSignature>,
     value_generator: &'g mut ValueGenerator,
     stack: Vec<Value>,
     renames: renaming::Renames,
@@ -692,7 +692,7 @@ pub fn rebuild_graph_inlining(
 ) {
     let mut builder = GraphBuilder {
         graph,
-        function_signatures: &HashMap::new(),
+        function_signatures: &BTreeMap::new(),
         value_generator,
         stack: Vec::new(),
         renames: crate::ssa::renaming::Renames::default(),
@@ -743,7 +743,7 @@ pub fn propagate_drops(graph: &mut Graph) -> bool {
         }
     }
 
-    let mut useless_values = HashSet::new();
+    let mut useless_values = BTreeSet::new();
     let mut out = Vec::new();
     for assignment in mem::take(&mut graph.assignments).into_iter().rev() {
         if assignment.op.pure()
@@ -770,7 +770,7 @@ pub fn propagate_drops(graph: &mut Graph) -> bool {
     out.reverse();
 
     // Remove drops for values created by useless operations.
-    let mut produced = graph.inputs.iter().collect::<HashSet<_>>();
+    let mut produced = graph.inputs.iter().collect::<BTreeSet<_>>();
     out.retain(|assignment| {
         produced.extend(assignment.to);
         assignment.args.iter().all(|arg| produced.contains(arg))

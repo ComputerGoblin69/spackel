@@ -19,7 +19,7 @@ use cranelift::prelude::{
 };
 use cranelift_module::{FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
-use std::{collections::HashMap, fs::File, io::Write, path::Path};
+use std::{collections::BTreeMap, fs::File, io::Write, path::Path};
 
 pub struct Options<'a> {
     pub target_triple: &'a str,
@@ -28,7 +28,7 @@ pub struct Options<'a> {
 
 pub fn compile(
     functions: &CallGraph,
-    function_signatures: &HashMap<&str, FunctionSignature>,
+    function_signatures: &BTreeMap<&str, FunctionSignature>,
     options: &Options,
 ) -> Result<()> {
     let mut shared_builder = settings::builder();
@@ -50,7 +50,7 @@ pub fn compile(
     let clif_function_signatures = function_signatures
         .iter()
         .map(|(name, signature)| (&**name, signature.to_clif(name, &*isa)))
-        .collect::<HashMap<_, _>>();
+        .collect::<BTreeMap<_, _>>();
     let function_ids = clif_function_signatures
         .iter()
         .map(|(&name, signature)| {
@@ -71,10 +71,10 @@ pub fn compile(
     let mut compiler = Compiler {
         function_ids,
         clif_function_signatures,
-        ssa_values: HashMap::new(),
+        ssa_values: BTreeMap::new(),
         isa: &*isa,
         object_module,
-        extern_functions: HashMap::new(),
+        extern_functions: BTreeMap::new(),
         extern_function_signatures,
     };
     compiler.compile(functions)?;
@@ -87,13 +87,13 @@ pub fn compile(
 }
 
 struct Compiler<'a> {
-    clif_function_signatures: HashMap<&'a str, Signature>,
-    function_ids: HashMap<&'a str, FuncId>,
-    ssa_values: HashMap<ssa::Value, Value>,
+    clif_function_signatures: BTreeMap<&'a str, Signature>,
+    function_ids: BTreeMap<&'a str, FuncId>,
+    ssa_values: BTreeMap<ssa::Value, Value>,
     isa: &'a dyn TargetIsa,
     object_module: ObjectModule,
-    extern_functions: HashMap<&'static str, FuncId>,
-    extern_function_signatures: HashMap<&'static str, Signature>,
+    extern_functions: BTreeMap<&'static str, FuncId>,
+    extern_function_signatures: BTreeMap<&'static str, Signature>,
 }
 
 impl Compiler<'_> {
@@ -527,10 +527,10 @@ impl Compiler<'_> {
 
 fn extern_function_signatures(
     isa: &dyn TargetIsa,
-) -> HashMap<&'static str, Signature> {
+) -> BTreeMap<&'static str, Signature> {
     let call_conv = isa.default_call_conv();
 
-    HashMap::from([
+    BTreeMap::from([
         (
             "spkl_print_char",
             Signature {

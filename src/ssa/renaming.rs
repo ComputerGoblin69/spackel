@@ -1,8 +1,8 @@
 use super::Value;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Default)]
-pub struct Renames(HashMap<Value, Value>);
+pub struct Renames(BTreeMap<Value, Value>);
 
 impl Renames {
     pub fn insert(&mut self, from: Value, to: Value) {

@@ -6,7 +6,7 @@ use anyhow::{ensure, Result};
 use codemap::Span;
 use itertools::Itertools;
 use std::{
-    collections::HashMap,
+    collections::BTreeMap,
     fmt::{self, Write as _},
 };
 
@@ -42,8 +42,8 @@ impl fmt::Display for Type {
 pub type Generics = Box<[Type]>;
 
 pub struct CheckedProgram<'src> {
-    pub function_signatures: HashMap<&'src str, FunctionSignature>,
-    pub function_bodies: HashMap<&'src str, Box<Block<Generics>>>,
+    pub function_signatures: BTreeMap<&'src str, FunctionSignature>,
+    pub function_bodies: BTreeMap<&'src str, Box<Block<Generics>>>,
 }
 
 #[derive(Clone)]
@@ -114,7 +114,7 @@ fn check_type_stack(instructions: &Block<Span>) -> Result<Box<[Type]>> {
 
 struct Checker<'src> {
     stack: Vec<Type>,
-    function_signatures: HashMap<&'src str, FunctionSignature>,
+    function_signatures: BTreeMap<&'src str, FunctionSignature>,
     unsafe_layers: usize,
 }
 

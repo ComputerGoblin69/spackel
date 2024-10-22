@@ -7,7 +7,7 @@ use crate::{
 use anyhow::{bail, ensure, Result};
 use codemap::Span;
 use itertools::{process_results, Itertools};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub fn parse(file: &codemap::File) -> Result<Program> {
     let tokens = expand_macros(lex(file));
@@ -22,7 +22,7 @@ pub fn parse(file: &codemap::File) -> Result<Program> {
 fn expand_macros<'a>(
     tokens: impl Iterator<Item = Token<'a>>,
 ) -> impl Iterator<Item = Result<Token<'a>>> {
-    let mut macros = HashMap::new();
+    let mut macros = BTreeMap::new();
 
     extra_iterators::batching_map(tokens, move |tokens, token| match &*token {
         "macro" => {

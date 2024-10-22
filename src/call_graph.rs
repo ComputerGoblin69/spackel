@@ -1,6 +1,6 @@
 use crate::ssa::{Op, ValueGenerator};
 use petgraph::{prelude::DiGraph, Direction};
-use std::{collections::HashMap, convert::Infallible, ops::ControlFlow};
+use std::{collections::BTreeMap, convert::Infallible, ops::ControlFlow};
 
 pub type CallGraph<'src> = DiGraph<Function<'src>, ()>;
 
@@ -10,13 +10,13 @@ pub struct Function<'src> {
     pub body: crate::ssa::Graph,
 }
 
-pub fn of(mut function_bodies: HashMap<&str, crate::ssa::Graph>) -> CallGraph {
+pub fn of(mut function_bodies: BTreeMap<&str, crate::ssa::Graph>) -> CallGraph {
     let mut graph = DiGraph::new();
 
     let nodes = function_bodies
         .keys()
         .map(|&name| (name, graph.add_node(name)))
-        .collect::<HashMap<_, _>>();
+        .collect::<BTreeMap<_, _>>();
 
     for (caller, body) in &function_bodies {
         let start = nodes[&**caller];

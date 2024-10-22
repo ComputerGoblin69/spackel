@@ -1,9 +1,9 @@
 use crate::{lexer::Token, typ::Type, unicode::prettify_token};
 use codemap::Span;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub struct Program<'src> {
-    pub functions: HashMap<&'src str, Function>,
+    pub functions: BTreeMap<&'src str, Function>,
 }
 
 pub struct Function {
