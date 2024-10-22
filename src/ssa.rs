@@ -700,33 +700,58 @@ pub fn rebuild_graph_inlining(
     for assignment in mem::take(&mut builder.graph.assignments) {
         if matches!(&assignment.op, Op::Call(name) if **name == *function.name)
         {
+            let mut function = function.body.clone();
+            refresh_graph(&mut function, builder.value_generator, false);
+
             builder.renames.extend(
-                function
-                    .body
-                    .inputs
-                    .iter()
-                    .zip(assignment.args.iter().copied()),
+                function.inputs.iter().zip(assignment.args.iter().copied()),
             );
-            for mut assignment in function.body.assignments.iter().cloned() {
-                let new_out = builder
-                    .value_generator
-                    .new_value_sequence(assignment.to.count());
-                builder.renames.extend(assignment.to.iter().zip(new_out));
-                assignment.to = new_out;
-                builder.add(assignment);
+            for assignment in &mut function.assignments {
+                builder.renames.apply_to_slice(&mut assignment.args);
             }
-            let outputs = function
-                .body
-                .outputs
-                .iter()
-                .map(|&out| builder.renames.take(out))
-                .collect::<Vec<_>>();
-            builder.renames.extend(assignment.to.iter().zip(outputs));
+            builder.renames.apply_to_slice(&mut function.outputs);
+            builder
+                .renames
+                .extend(assignment.to.iter().zip(function.outputs));
         } else {
             builder.add(assignment);
         }
     }
     builder.renames.apply_to_slice(&mut builder.graph.outputs);
+}
+
+fn refresh_graph(
+    graph: &mut Graph,
+    value_generator: &mut ValueGenerator,
+    including_inputs: bool,
+) {
+    let mut renames = renaming::Renames::default();
+
+    if including_inputs {
+        let inputs = value_generator.new_value_sequence(graph.inputs.count());
+        renames.extend(std::iter::zip(graph.inputs, inputs));
+        graph.inputs = inputs;
+    }
+
+    for assignment in &mut graph.assignments {
+        renames.apply_to_slice(&mut assignment.args);
+        let to = value_generator.new_value_sequence(assignment.to.count());
+        renames.extend(std::iter::zip(assignment.to, to));
+        assignment.to = to;
+
+        match &mut assignment.op {
+            Op::Then(body) | Op::Repeat(body) => {
+                refresh_graph(body, value_generator, true);
+            }
+            Op::ThenElse(then, else_) => {
+                refresh_graph(then, value_generator, true);
+                refresh_graph(else_, value_generator, true);
+            }
+            _ => {}
+        }
+    }
+
+    renames.apply_to_slice(&mut graph.outputs);
 }
 
 pub fn propagate_drops(graph: &mut Graph) -> bool {
