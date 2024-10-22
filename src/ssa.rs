@@ -713,6 +713,10 @@ pub fn rebuild_graph_inlining(
             builder
                 .renames
                 .extend(assignment.to.iter().zip(function.outputs));
+
+            for assignment in function.assignments {
+                builder.add(assignment);
+            }
         } else {
             builder.add(assignment);
         }
