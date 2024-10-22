@@ -229,7 +229,7 @@ impl Compiler<'_> {
             Op::Bool(b) => {
                 self.set(to + 0, fb.ins().iconst(I8, i64::from(*b)));
             }
-            Op::Type(_) | Op::TypeOf | Op::Ptr => todo!(),
+            Op::Type | Op::TypeOf | Op::Ptr => todo!(),
             Op::PrintChar => {
                 let n = self.take(args[0]);
                 self.call_extern("spkl_print_char", &[n], fb);

@@ -251,7 +251,7 @@ pub enum Op {
     I32(i32),
     F32(f32),
     Bool(bool),
-    Type(Type),
+    Type,
     PrintChar,
     PrintI32,
     PrintF32,
@@ -382,7 +382,7 @@ impl GraphBuilder<'_> {
             Instruction::PushI32(n) => (1, 0, Op::I32(n)),
             Instruction::PushF32(n) => (1, 0, Op::F32(n)),
             Instruction::PushBool(b) => (1, 0, Op::Bool(b)),
-            Instruction::PushType(typ) => (1, 0, Op::Type(typ)),
+            Instruction::PushType(_) => (1, 0, Op::Type),
             Instruction::PrintChar => (0, 1, Op::PrintChar),
             Instruction::Print => (
                 0,
