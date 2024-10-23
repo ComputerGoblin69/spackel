@@ -163,23 +163,21 @@ impl Graph {
             assignments: Vec::new(),
             outputs: Vec::new(),
         };
-        let mut converter = Converter {
-            builder: GraphBuilder {
-                graph: &mut graph,
-                value_generator,
-                renames: renaming::Renames::default(),
-            },
-            function_signatures,
-            stack: inputs.iter().collect(),
+        let mut stack = inputs.iter().collect();
+        let mut builder = GraphBuilder {
+            graph: &mut graph,
+            value_generator,
+            renames: renaming::Renames::default(),
         };
         for instruction in block {
-            converter.add_instruction(instruction);
+            builder.add_instruction(
+                instruction,
+                function_signatures,
+                &mut stack,
+            );
         }
-        converter
-            .builder
-            .renames
-            .apply_to_slice(&mut converter.stack);
-        graph.outputs = converter.stack;
+        builder.renames.apply_to_slice(&mut stack);
+        graph.outputs = stack;
         graph
     }
 
@@ -307,26 +305,22 @@ impl Op {
     }
 }
 
-struct Converter<'g> {
-    builder: GraphBuilder<'g>,
-    function_signatures: &'g BTreeMap<&'g str, FunctionSignature>,
-    stack: Vec<Value>,
-}
-
 struct GraphBuilder<'g> {
     graph: &'g mut Graph,
     value_generator: &'g mut ValueGenerator,
     renames: renaming::Renames,
 }
 
-impl Converter<'_> {
+impl GraphBuilder<'_> {
     fn add_instruction(
         &mut self,
         (instruction, generics): (Instruction<Generics>, Generics),
+        function_signatures: &BTreeMap<&str, FunctionSignature>,
+        stack: &mut Vec<Value>,
     ) {
         let (to_count, arg_count, op) = match instruction {
             Instruction::Call(name) => {
-                let signature = &self.function_signatures[&*name];
+                let signature = &function_signatures[&*name];
                 (
                     signature.returns.len(),
                     signature.parameters.len(),
@@ -336,51 +330,47 @@ impl Converter<'_> {
             Instruction::Then(body) => {
                 let body_graph = Graph::from_block(
                     body,
-                    (self.stack.len() - 1).try_into().unwrap(),
-                    self.function_signatures,
-                    self.builder.value_generator,
+                    (stack.len() - 1).try_into().unwrap(),
+                    function_signatures,
+                    self.value_generator,
                 );
-                (
-                    self.stack.len() - 1,
-                    self.stack.len(),
-                    Op::Then(Box::new(body_graph)),
-                )
+                (stack.len() - 1, stack.len(), Op::Then(Box::new(body_graph)))
             }
             Instruction::ThenElse(then, else_) => {
                 let then_graph = Graph::from_block(
                     then,
-                    (self.stack.len() - 1).try_into().unwrap(),
-                    self.function_signatures,
-                    self.builder.value_generator,
+                    (stack.len() - 1).try_into().unwrap(),
+                    function_signatures,
+                    self.value_generator,
                 );
                 let else_graph = Graph::from_block(
                     else_,
-                    (self.stack.len() - 1).try_into().unwrap(),
-                    self.function_signatures,
-                    self.builder.value_generator,
+                    (stack.len() - 1).try_into().unwrap(),
+                    function_signatures,
+                    self.value_generator,
                 );
                 (
                     then_graph.outputs.len(),
-                    self.stack.len(),
+                    stack.len(),
                     Op::ThenElse(Box::new(then_graph), Box::new(else_graph)),
                 )
             }
             Instruction::Repeat { body, .. } => {
                 let body_graph = Graph::from_block(
                     body,
-                    self.stack.len().try_into().unwrap(),
-                    self.function_signatures,
-                    self.builder.value_generator,
+                    stack.len().try_into().unwrap(),
+                    function_signatures,
+                    self.value_generator,
                 );
-                (
-                    self.stack.len(),
-                    self.stack.len(),
-                    Op::Repeat(Box::new(body_graph)),
-                )
+                (stack.len(), stack.len(), Op::Repeat(Box::new(body_graph)))
             }
             Instruction::Unsafe(body) => {
                 for instruction in body {
-                    self.add_instruction(instruction);
+                    self.add_instruction(
+                        instruction,
+                        function_signatures,
+                        stack,
+                    );
                 }
                 return;
             }
@@ -432,56 +422,68 @@ impl Converter<'_> {
             }
             Instruction::BinLogicOp(op) => (1, 2, Op::BinLogic(op)),
             Instruction::Swap => {
-                let a = self.stack.len() - 2;
-                let b = self.stack.len() - 1;
-                self.stack.swap(a, b);
+                let a = stack.len() - 2;
+                let b = stack.len() - 1;
+                stack.swap(a, b);
                 return;
             }
             Instruction::Nip => {
                 let dropped_type = generics[0].clone();
-                self.add_instruction((Instruction::Swap, generics));
-                self.add_instruction((
-                    Instruction::Drop,
-                    Box::new([dropped_type]),
-                ));
+                self.add_instruction(
+                    (Instruction::Swap, generics),
+                    function_signatures,
+                    stack,
+                );
+                self.add_instruction(
+                    (Instruction::Drop, Box::new([dropped_type])),
+                    function_signatures,
+                    stack,
+                );
                 return;
             }
             Instruction::Over => {
-                let a = self.stack.len() - 2;
-                let b = self.stack.len() - 1;
-                self.stack.swap(a, b);
-                self.add_instruction((
-                    Instruction::Dup,
-                    Box::new([Box::into_iter(generics).next().unwrap()]),
-                ));
-                let a = self.stack.len() - 3;
-                let b = self.stack.len() - 2;
-                self.stack.swap(a, b);
+                let a = stack.len() - 2;
+                let b = stack.len() - 1;
+                stack.swap(a, b);
+                self.add_instruction(
+                    (
+                        Instruction::Dup,
+                        Box::new([Box::into_iter(generics).next().unwrap()]),
+                    ),
+                    function_signatures,
+                    stack,
+                );
+                let a = stack.len() - 3;
+                let b = stack.len() - 2;
+                stack.swap(a, b);
                 return;
             }
             Instruction::Tuck => {
-                self.add_instruction((
-                    Instruction::Dup,
-                    Box::new([Box::into_iter(generics).nth(1).unwrap()]),
-                ));
-                let a = self.stack.len() - 2;
-                let new_a = self.stack.len() - 1;
-                self.stack.swap(a, new_a);
-                let b = self.stack.len() - 3;
-                let new_a = self.stack.len() - 2;
-                self.stack.swap(b, new_a);
+                self.add_instruction(
+                    (
+                        Instruction::Dup,
+                        Box::new([Box::into_iter(generics).nth(1).unwrap()]),
+                    ),
+                    function_signatures,
+                    stack,
+                );
+                let a = stack.len() - 2;
+                let new_a = stack.len() - 1;
+                stack.swap(a, new_a);
+                let b = stack.len() - 3;
+                let new_a = stack.len() - 2;
+                stack.swap(b, new_a);
                 return;
             }
         };
         let to = self
-            .builder
             .value_generator
             .new_value_sequence(to_count.try_into().unwrap());
-        let remaining_len = self.stack.len() - arg_count;
-        let args = self.stack[remaining_len..].into();
-        self.stack.truncate(remaining_len);
-        self.stack.extend(to);
-        self.builder.add(Assignment { to, args, op });
+        let remaining_len = stack.len() - arg_count;
+        let args = stack[remaining_len..].into();
+        stack.truncate(remaining_len);
+        stack.extend(to);
+        self.add(Assignment { to, args, op });
     }
 }
 
