@@ -459,12 +459,8 @@ impl GraphBuilder<'_> {
                     function_signatures,
                     stack,
                 );
-                let a = stack.len() - 2;
-                let new_a = stack.len() - 1;
-                stack.swap(a, new_a);
-                let b = stack.len() - 3;
-                let new_a = stack.len() - 2;
-                stack.swap(b, new_a);
+                let len = stack.len();
+                stack[len - 3..].rotate_right(1);
                 return;
             }
         };
