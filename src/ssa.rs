@@ -428,18 +428,10 @@ impl GraphBuilder<'_> {
                 return;
             }
             Instruction::Nip => {
-                let dropped_type = generics[0].clone();
-                self.add_instruction(
-                    (Instruction::Swap, generics),
-                    function_signatures,
-                    stack,
-                );
-                self.add_instruction(
-                    (Instruction::Drop, Box::new([dropped_type])),
-                    function_signatures,
-                    stack,
-                );
-                return;
+                let a = stack.len() - 2;
+                let b = stack.len() - 1;
+                stack.swap(a, b);
+                (0, 1, Op::Drop)
             }
             Instruction::Over => {
                 let a = stack.len() - 2;
