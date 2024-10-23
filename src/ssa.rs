@@ -163,20 +163,23 @@ impl Graph {
             assignments: Vec::new(),
             outputs: Vec::new(),
         };
-        let mut graph_builder = GraphBuilder {
-            graph: &mut graph,
+        let mut converter = Converter {
+            builder: GraphBuilder {
+                graph: &mut graph,
+                value_generator,
+                renames: renaming::Renames::default(),
+            },
             function_signatures,
-            value_generator,
             stack: inputs.iter().collect(),
-            renames: renaming::Renames::default(),
         };
         for instruction in block {
-            graph_builder.add_instruction(instruction);
+            converter.add_instruction(instruction);
         }
-        graph_builder
+        converter
+            .builder
             .renames
-            .apply_to_slice(&mut graph_builder.stack);
-        graph.outputs = graph_builder.stack;
+            .apply_to_slice(&mut converter.stack);
+        graph.outputs = converter.stack;
         graph
     }
 
@@ -304,15 +307,19 @@ impl Op {
     }
 }
 
+struct Converter<'g> {
+    builder: GraphBuilder<'g>,
+    function_signatures: &'g BTreeMap<&'g str, FunctionSignature>,
+    stack: Vec<Value>,
+}
+
 struct GraphBuilder<'g> {
     graph: &'g mut Graph,
-    function_signatures: &'g BTreeMap<&'g str, FunctionSignature>,
     value_generator: &'g mut ValueGenerator,
-    stack: Vec<Value>,
     renames: renaming::Renames,
 }
 
-impl GraphBuilder<'_> {
+impl Converter<'_> {
     fn add_instruction(
         &mut self,
         (instruction, generics): (Instruction<Generics>, Generics),
@@ -331,7 +338,7 @@ impl GraphBuilder<'_> {
                     body,
                     (self.stack.len() - 1).try_into().unwrap(),
                     self.function_signatures,
-                    self.value_generator,
+                    self.builder.value_generator,
                 );
                 (
                     self.stack.len() - 1,
@@ -344,13 +351,13 @@ impl GraphBuilder<'_> {
                     then,
                     (self.stack.len() - 1).try_into().unwrap(),
                     self.function_signatures,
-                    self.value_generator,
+                    self.builder.value_generator,
                 );
                 let else_graph = Graph::from_block(
                     else_,
                     (self.stack.len() - 1).try_into().unwrap(),
                     self.function_signatures,
-                    self.value_generator,
+                    self.builder.value_generator,
                 );
                 (
                     then_graph.outputs.len(),
@@ -363,7 +370,7 @@ impl GraphBuilder<'_> {
                     body,
                     self.stack.len().try_into().unwrap(),
                     self.function_signatures,
-                    self.value_generator,
+                    self.builder.value_generator,
                 );
                 (
                     self.stack.len(),
@@ -467,15 +474,18 @@ impl GraphBuilder<'_> {
             }
         };
         let to = self
+            .builder
             .value_generator
             .new_value_sequence(to_count.try_into().unwrap());
         let remaining_len = self.stack.len() - arg_count;
         let args = self.stack[remaining_len..].into();
         self.stack.truncate(remaining_len);
         self.stack.extend(to);
-        self.add(Assignment { to, args, op });
+        self.builder.add(Assignment { to, args, op });
     }
+}
 
+impl GraphBuilder<'_> {
     fn drop(&mut self, value: Value) {
         self.add(Assignment {
             to: ValueSequence::default(),
@@ -692,9 +702,7 @@ pub fn rebuild_graph_inlining(
 ) {
     let mut builder = GraphBuilder {
         graph,
-        function_signatures: &BTreeMap::new(),
         value_generator,
-        stack: Vec::new(),
         renames: crate::ssa::renaming::Renames::default(),
     };
     for assignment in mem::take(&mut builder.graph.assignments) {
