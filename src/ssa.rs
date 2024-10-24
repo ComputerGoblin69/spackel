@@ -406,37 +406,28 @@ impl Graph {
         );
     }
 
-    fn i32(&mut self, to: Value, n: i32, renames: &mut Renames) {
-        self.add(
-            Assignment {
-                to: to.into(),
-                args: [].into(),
-                op: Op::I32(n),
-            },
-            renames,
-        );
+    fn i32(&mut self, to: Value, n: i32) {
+        self.assignments.push(Assignment {
+            to: to.into(),
+            args: [].into(),
+            op: Op::I32(n),
+        });
     }
 
-    fn f32(&mut self, to: Value, n: f32, renames: &mut Renames) {
-        self.add(
-            Assignment {
-                to: to.into(),
-                args: [].into(),
-                op: Op::F32(n),
-            },
-            renames,
-        );
+    fn f32(&mut self, to: Value, n: f32) {
+        self.assignments.push(Assignment {
+            to: to.into(),
+            args: [].into(),
+            op: Op::F32(n),
+        });
     }
 
-    fn bool(&mut self, to: Value, b: bool, renames: &mut Renames) {
-        self.add(
-            Assignment {
-                to: to.into(),
-                args: [].into(),
-                op: Op::Bool(b),
-            },
-            renames,
-        );
+    fn bool(&mut self, to: Value, b: bool) {
+        self.assignments.push(Assignment {
+            to: to.into(),
+            args: [].into(),
+            op: Op::Bool(b),
+        });
     }
 
     fn add(
@@ -535,7 +526,7 @@ impl Graph {
                     } {
                         self.drop(args[0], renames);
                         self.drop(args[1], renames);
-                        self.i32(to + 0, res, renames);
+                        self.i32(to + 0, res);
                         return;
                     }
                 } else if let (Some(Op::F32(a)), Some(Op::F32(b))) = (a, b) {
@@ -548,7 +539,7 @@ impl Graph {
                     };
                     self.drop(args[0], renames);
                     self.drop(args[1], renames);
-                    self.f32(to + 0, res, renames);
+                    self.f32(to + 0, res);
                     return;
                 }
             }
@@ -565,7 +556,7 @@ impl Graph {
                     };
                     self.drop(args[0], renames);
                     self.drop(args[1], renames);
-                    self.bool(to + 0, res, renames);
+                    self.bool(to + 0, res);
                     return;
                 }
             }
@@ -573,7 +564,7 @@ impl Graph {
                 if let Some(Op::F32(num)) = self.source_op(args[0]) {
                     let num = *num;
                     self.drop(args[0], renames);
-                    self.f32(to + 0, num.sqrt(), renames);
+                    self.f32(to + 0, num.sqrt());
                     return;
                 }
             }
@@ -581,7 +572,7 @@ impl Graph {
                 if let Some(Op::Bool(operand)) = self.source_op(args[0]) {
                     let res = !*operand;
                     self.drop(args[0], renames);
-                    self.bool(to + 0, res, renames);
+                    self.bool(to + 0, res);
                     return;
                 }
             }
@@ -609,7 +600,7 @@ impl Graph {
                 } {
                     self.drop(args[0], renames);
                     self.drop(args[1], renames);
-                    self.bool(to + 0, res, renames);
+                    self.bool(to + 0, res);
                     return;
                 }
             }
