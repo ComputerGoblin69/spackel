@@ -161,17 +161,14 @@ impl Graph {
             outputs: Vec::new(),
         };
         let mut stack = inputs.iter().collect();
-        let mut renames = Renames::default();
         for instruction in block {
             graph.add_instruction(
                 instruction,
-                &mut renames,
                 value_generator,
                 function_signatures,
                 &mut stack,
             );
         }
-        renames.apply_to_slice(&mut stack);
         graph.outputs = stack;
         graph
     }
@@ -217,7 +214,6 @@ impl Graph {
     fn add_instruction(
         &mut self,
         (instruction, generics): (Instruction<Generics>, Generics),
-        renames: &mut Renames,
         value_generator: &mut ValueGenerator,
         function_signatures: &BTreeMap<&str, FunctionSignature>,
         stack: &mut Vec<Value>,
@@ -272,7 +268,6 @@ impl Graph {
                 for instruction in body {
                     self.add_instruction(
                         instruction,
-                        renames,
                         value_generator,
                         function_signatures,
                         stack,
@@ -348,7 +343,6 @@ impl Graph {
                         Instruction::Dup,
                         Box::new([Box::into_iter(generics).next().unwrap()]),
                     ),
-                    renames,
                     value_generator,
                     function_signatures,
                     stack,
@@ -364,7 +358,6 @@ impl Graph {
                         Instruction::Dup,
                         Box::new([Box::into_iter(generics).nth(1).unwrap()]),
                     ),
-                    renames,
                     value_generator,
                     function_signatures,
                     stack,
@@ -380,12 +373,7 @@ impl Graph {
         let args = stack[remaining_len..].into();
         stack.truncate(remaining_len);
         stack.extend(to);
-        self.add(Assignment { to, args, op }, renames);
-    }
-
-    fn add(&mut self, mut assignment: Assignment, renames: &mut Renames) {
-        renames.apply_to_slice(&mut assignment.args);
-        self.assignments.push(assignment);
+        self.assignments.push(Assignment { to, args, op });
     }
 }
 
@@ -460,7 +448,7 @@ pub fn rebuild_graph_inlining(
     value_generator: &mut ValueGenerator,
 ) {
     let mut renames = Renames::default();
-    for assignment in mem::take(&mut graph.assignments) {
+    for mut assignment in mem::take(&mut graph.assignments) {
         if matches!(&assignment.op, Op::Call(name) if **name == *function.name)
         {
             let mut function = function.body.clone();
@@ -469,17 +457,17 @@ pub fn rebuild_graph_inlining(
             renames.extend(
                 function.inputs.iter().zip(assignment.args.iter().copied()),
             );
-            for assignment in &mut function.assignments {
+
+            for mut assignment in function.assignments {
                 renames.apply_to_slice(&mut assignment.args);
+                graph.assignments.push(assignment);
             }
+
             renames.apply_to_slice(&mut function.outputs);
             renames.extend(assignment.to.iter().zip(function.outputs));
-
-            for assignment in function.assignments {
-                graph.add(assignment, &mut renames);
-            }
         } else {
-            graph.add(assignment, &mut renames);
+            renames.apply_to_slice(&mut assignment.args);
+            graph.assignments.push(assignment);
         }
     }
     renames.apply_to_slice(&mut graph.outputs);
