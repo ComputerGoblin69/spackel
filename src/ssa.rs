@@ -6,6 +6,7 @@ use crate::{
     typ::{FunctionSignature, Generics, Type},
 };
 use itertools::Itertools;
+use renaming::Renames;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt, mem,
@@ -164,19 +165,17 @@ impl Graph {
             outputs: Vec::new(),
         };
         let mut stack = inputs.iter().collect();
-        let mut builder = GraphBuilder {
-            graph: &mut graph,
-            renames: renaming::Renames::default(),
-        };
+        let mut renames = Renames::default();
         for instruction in block {
-            builder.add_instruction(
+            graph.add_instruction(
                 instruction,
+                &mut renames,
                 value_generator,
                 function_signatures,
                 &mut stack,
             );
         }
-        builder.renames.apply_to_slice(&mut stack);
+        renames.apply_to_slice(&mut stack);
         graph.outputs = stack;
         graph
     }
@@ -225,6 +224,398 @@ impl Graph {
             }
         }
         ControlFlow::Continue(())
+    }
+
+    fn add_instruction(
+        &mut self,
+        (instruction, generics): (Instruction<Generics>, Generics),
+        renames: &mut Renames,
+        value_generator: &mut ValueGenerator,
+        function_signatures: &BTreeMap<&str, FunctionSignature>,
+        stack: &mut Vec<Value>,
+    ) {
+        let (to_count, arg_count, op) = match instruction {
+            Instruction::Call(name) => {
+                let signature = &function_signatures[&*name];
+                (
+                    signature.returns.len(),
+                    signature.parameters.len(),
+                    Op::Call(name),
+                )
+            }
+            Instruction::Then(body) => {
+                let body_graph = Self::from_block(
+                    body,
+                    (stack.len() - 1).try_into().unwrap(),
+                    function_signatures,
+                    value_generator,
+                );
+                (stack.len() - 1, stack.len(), Op::Then(Box::new(body_graph)))
+            }
+            Instruction::ThenElse(then, else_) => {
+                let then_graph = Self::from_block(
+                    then,
+                    (stack.len() - 1).try_into().unwrap(),
+                    function_signatures,
+                    value_generator,
+                );
+                let else_graph = Self::from_block(
+                    else_,
+                    (stack.len() - 1).try_into().unwrap(),
+                    function_signatures,
+                    value_generator,
+                );
+                (
+                    then_graph.outputs.len(),
+                    stack.len(),
+                    Op::ThenElse(Box::new(then_graph), Box::new(else_graph)),
+                )
+            }
+            Instruction::Repeat { body, .. } => {
+                let body_graph = Self::from_block(
+                    body,
+                    stack.len().try_into().unwrap(),
+                    function_signatures,
+                    value_generator,
+                );
+                (stack.len(), stack.len(), Op::Repeat(Box::new(body_graph)))
+            }
+            Instruction::Unsafe(body) => {
+                for instruction in body {
+                    self.add_instruction(
+                        instruction,
+                        renames,
+                        value_generator,
+                        function_signatures,
+                        stack,
+                    );
+                }
+                return;
+            }
+            Instruction::Dup => (2, 1, Op::Dup),
+            Instruction::Drop => (0, 1, Op::Drop),
+            Instruction::PushI32(n) => (1, 0, Op::I32(n)),
+            Instruction::PushF32(n) => (1, 0, Op::F32(n)),
+            Instruction::PushBool(b) => (1, 0, Op::Bool(b)),
+            Instruction::PushType(_) => (1, 0, Op::Type),
+            Instruction::PrintChar => (0, 1, Op::PrintChar),
+            Instruction::Print => (
+                0,
+                1,
+                match generics[0] {
+                    Type::I32 => Op::PrintI32,
+                    Type::F32 => Op::PrintF32,
+                    _ => unreachable!(),
+                },
+            ),
+            Instruction::Println => (
+                0,
+                1,
+                match generics[0] {
+                    Type::I32 => Op::PrintlnI32,
+                    Type::F32 => Op::PrintlnF32,
+                    _ => unreachable!(),
+                },
+            ),
+            Instruction::Not => (1, 1, Op::Not),
+            Instruction::Sqrt => (1, 1, Op::Sqrt),
+            Instruction::TypeOf => (1, 1, Op::TypeOf),
+            Instruction::Ptr => (1, 1, Op::Ptr),
+            Instruction::AddrOf => {
+                (1, 1, Op::AddrOf(Box::into_iter(generics).next().unwrap()))
+            }
+            Instruction::ReadPtr => {
+                (1, 1, Op::ReadPtr(Box::into_iter(generics).next().unwrap()))
+            }
+            Instruction::BinMathOp(operation) => (
+                1,
+                2,
+                Op::BinMath {
+                    operation,
+                    typ: Box::into_iter(generics).next(),
+                },
+            ),
+            Instruction::Comparison(comparison) => {
+                (1, 2, Op::Compare(comparison))
+            }
+            Instruction::BinLogicOp(op) => (1, 2, Op::BinLogic(op)),
+            Instruction::Swap => {
+                let a = stack.len() - 2;
+                let b = stack.len() - 1;
+                stack.swap(a, b);
+                return;
+            }
+            Instruction::Nip => {
+                let a = stack.len() - 2;
+                let b = stack.len() - 1;
+                stack.swap(a, b);
+                (0, 1, Op::Drop)
+            }
+            Instruction::Over => {
+                let a = stack.len() - 2;
+                let b = stack.len() - 1;
+                stack.swap(a, b);
+                self.add_instruction(
+                    (
+                        Instruction::Dup,
+                        Box::new([Box::into_iter(generics).next().unwrap()]),
+                    ),
+                    renames,
+                    value_generator,
+                    function_signatures,
+                    stack,
+                );
+                let a = stack.len() - 3;
+                let b = stack.len() - 2;
+                stack.swap(a, b);
+                return;
+            }
+            Instruction::Tuck => {
+                self.add_instruction(
+                    (
+                        Instruction::Dup,
+                        Box::new([Box::into_iter(generics).nth(1).unwrap()]),
+                    ),
+                    renames,
+                    value_generator,
+                    function_signatures,
+                    stack,
+                );
+                let len = stack.len();
+                stack[len - 3..].rotate_right(1);
+                return;
+            }
+        };
+        let to =
+            value_generator.new_value_sequence(to_count.try_into().unwrap());
+        let remaining_len = stack.len() - arg_count;
+        let args = stack[remaining_len..].into();
+        stack.truncate(remaining_len);
+        stack.extend(to);
+        self.add(Assignment { to, args, op }, renames);
+    }
+
+    fn drop(&mut self, value: Value, renames: &mut Renames) {
+        self.add(
+            Assignment {
+                to: ValueSequence::default(),
+                args: [value].into(),
+                op: Op::Drop,
+            },
+            renames,
+        );
+    }
+
+    fn i32(&mut self, to: Value, n: i32, renames: &mut Renames) {
+        self.add(
+            Assignment {
+                to: to.into(),
+                args: [].into(),
+                op: Op::I32(n),
+            },
+            renames,
+        );
+    }
+
+    fn f32(&mut self, to: Value, n: f32, renames: &mut Renames) {
+        self.add(
+            Assignment {
+                to: to.into(),
+                args: [].into(),
+                op: Op::F32(n),
+            },
+            renames,
+        );
+    }
+
+    fn bool(&mut self, to: Value, b: bool, renames: &mut Renames) {
+        self.add(
+            Assignment {
+                to: to.into(),
+                args: [].into(),
+                op: Op::Bool(b),
+            },
+            renames,
+        );
+    }
+
+    fn add(
+        &mut self,
+        Assignment {
+            to,
+            mut args,
+            mut op,
+        }: Assignment,
+        renames: &mut Renames,
+    ) {
+        renames.apply_to_slice(&mut args);
+
+        match op {
+            Op::Then(ref mut body) => {
+                let (&condition_value, args) = args.split_last().unwrap();
+                if let Some(Op::Bool(condition)) =
+                    self.source_op(condition_value)
+                {
+                    let condition = *condition;
+                    self.drop(condition_value, renames);
+                    if condition {
+                        renames.extend(
+                            body.inputs.iter().zip(args.iter().copied()),
+                        );
+                        for assignment in mem::take(&mut body.assignments) {
+                            self.add(assignment, renames);
+                        }
+                        renames.apply_to_slice(&mut body.outputs);
+                        renames.extend(
+                            to.iter().zip(body.outputs.iter().copied()),
+                        );
+                    } else {
+                        renames.extend(to.iter().zip(args.iter().copied()));
+                    }
+                    return;
+                }
+            }
+            Op::ThenElse(ref mut then, ref mut else_) => {
+                let (&condition_value, args) = args.split_last().unwrap();
+                if let Some(Op::Bool(condition)) =
+                    self.source_op(condition_value)
+                {
+                    let body = if *condition { then } else { else_ };
+                    self.drop(condition_value, renames);
+                    renames
+                        .extend(body.inputs.iter().zip(args.iter().copied()));
+                    for assignment in mem::take(&mut body.assignments) {
+                        self.add(assignment, renames);
+                    }
+                    renames.apply_to_slice(&mut body.outputs);
+                    renames.extend(to.iter().zip(body.outputs.iter().copied()));
+                    return;
+                }
+            }
+            Op::Dup => {
+                if let Some(source) =
+                    self.source_op(args[0]).filter(|op| op.trivially_dupable())
+                {
+                    let source = source.clone();
+                    self.drop(args[0], renames);
+                    self.add(
+                        Assignment {
+                            to: (to + 0).into(),
+                            args: [].into(),
+                            op: source.clone(),
+                        },
+                        renames,
+                    );
+                    self.add(
+                        Assignment {
+                            to: (to + 1).into(),
+                            args: [].into(),
+                            op: source,
+                        },
+                        renames,
+                    );
+                    return;
+                }
+            }
+            Op::BinMath { operation, .. } => {
+                let a = self.source_op(args[0]);
+                let b = self.source_op(args[1]);
+                if let (Some(Op::I32(a)), Some(Op::I32(b))) = (a, b) {
+                    if let Some(res) = match operation {
+                        BinMathOp::Add => a.checked_add(*b),
+                        BinMathOp::Sub => a.checked_sub(*b),
+                        BinMathOp::Mul => a.checked_mul(*b),
+                        BinMathOp::Div => a.checked_div(*b),
+                        BinMathOp::Rem => a.checked_rem(*b),
+                        BinMathOp::SillyAdd => match (*a, *b) {
+                            (9, 10) | (10, 9) => Some(21),
+                            (1, 1) => Some(1),
+                            _ => a.checked_add(*b),
+                        },
+                    } {
+                        self.drop(args[0], renames);
+                        self.drop(args[1], renames);
+                        self.i32(to + 0, res, renames);
+                        return;
+                    }
+                } else if let (Some(Op::F32(a)), Some(Op::F32(b))) = (a, b) {
+                    let res = match operation {
+                        BinMathOp::Add => *a + *b,
+                        BinMathOp::Sub => *a - *b,
+                        BinMathOp::Mul => *a * *b,
+                        BinMathOp::Div => *a / *b,
+                        _ => unreachable!(),
+                    };
+                    self.drop(args[0], renames);
+                    self.drop(args[1], renames);
+                    self.f32(to + 0, res, renames);
+                    return;
+                }
+            }
+            Op::Compare(comparison) => {
+                let a = self.source_op(args[0]);
+                let b = self.source_op(args[1]);
+                if let (Some(Op::I32(a)), Some(Op::I32(b))) = (a, b) {
+                    let res = match comparison {
+                        Comparison::Lt => *a < *b,
+                        Comparison::Le => *a <= *b,
+                        Comparison::Eq => *a == *b,
+                        Comparison::Ge => *a >= *b,
+                        Comparison::Gt => *a > *b,
+                    };
+                    self.drop(args[0], renames);
+                    self.drop(args[1], renames);
+                    self.bool(to + 0, res, renames);
+                    return;
+                }
+            }
+            Op::Sqrt => {
+                if let Some(Op::F32(num)) = self.source_op(args[0]) {
+                    let num = *num;
+                    self.drop(args[0], renames);
+                    self.f32(to + 0, num.sqrt(), renames);
+                    return;
+                }
+            }
+            Op::Not => {
+                if let Some(Op::Bool(operand)) = self.source_op(args[0]) {
+                    let res = !*operand;
+                    self.drop(args[0], renames);
+                    self.bool(to + 0, res, renames);
+                    return;
+                }
+            }
+            Op::BinLogic(operation) => {
+                use BinLogicOp as B;
+
+                let a = self.source_op(args[0]).and_then(Op::as_bool);
+                let b = self.source_op(args[1]).and_then(Op::as_bool);
+                if let Some(res) = match (operation, a, b) {
+                    (B::And, None, Some(false))
+                    | (B::And, Some(false), None)
+                    | (B::Nor, None, Some(true))
+                    | (B::Nor, Some(true), None) => Some(false),
+                    (B::And, Some(a), Some(b)) => Some(a && b),
+                    (B::Or, None, Some(true))
+                    | (B::Or, Some(true), None)
+                    | (B::Nand, None, Some(false))
+                    | (B::Nand, Some(false), None) => Some(true),
+                    (B::Or, Some(a), Some(b)) => Some(a || b),
+                    (B::Xor, Some(a), Some(b)) => Some(a != b),
+                    (B::Nand, Some(a), Some(b)) => Some(!(a && b)),
+                    (B::Nor, Some(a), Some(b)) => Some(!(a || b)),
+                    (B::Xnor, Some(a), Some(b)) => Some(a == b),
+                    _ => None,
+                } {
+                    self.drop(args[0], renames);
+                    self.drop(args[1], renames);
+                    self.bool(to + 0, res, renames);
+                    return;
+                }
+            }
+            _ => {}
+        }
+        self.assignments.push(Assignment { to, args, op });
     }
 }
 
@@ -305,420 +696,35 @@ impl Op {
     }
 }
 
-struct GraphBuilder<'g> {
-    graph: &'g mut Graph,
-    renames: renaming::Renames,
-}
-
-impl GraphBuilder<'_> {
-    fn add_instruction(
-        &mut self,
-        (instruction, generics): (Instruction<Generics>, Generics),
-        value_generator: &mut ValueGenerator,
-        function_signatures: &BTreeMap<&str, FunctionSignature>,
-        stack: &mut Vec<Value>,
-    ) {
-        let (to_count, arg_count, op) = match instruction {
-            Instruction::Call(name) => {
-                let signature = &function_signatures[&*name];
-                (
-                    signature.returns.len(),
-                    signature.parameters.len(),
-                    Op::Call(name),
-                )
-            }
-            Instruction::Then(body) => {
-                let body_graph = Graph::from_block(
-                    body,
-                    (stack.len() - 1).try_into().unwrap(),
-                    function_signatures,
-                    value_generator,
-                );
-                (stack.len() - 1, stack.len(), Op::Then(Box::new(body_graph)))
-            }
-            Instruction::ThenElse(then, else_) => {
-                let then_graph = Graph::from_block(
-                    then,
-                    (stack.len() - 1).try_into().unwrap(),
-                    function_signatures,
-                    value_generator,
-                );
-                let else_graph = Graph::from_block(
-                    else_,
-                    (stack.len() - 1).try_into().unwrap(),
-                    function_signatures,
-                    value_generator,
-                );
-                (
-                    then_graph.outputs.len(),
-                    stack.len(),
-                    Op::ThenElse(Box::new(then_graph), Box::new(else_graph)),
-                )
-            }
-            Instruction::Repeat { body, .. } => {
-                let body_graph = Graph::from_block(
-                    body,
-                    stack.len().try_into().unwrap(),
-                    function_signatures,
-                    value_generator,
-                );
-                (stack.len(), stack.len(), Op::Repeat(Box::new(body_graph)))
-            }
-            Instruction::Unsafe(body) => {
-                for instruction in body {
-                    self.add_instruction(
-                        instruction,
-                        value_generator,
-                        function_signatures,
-                        stack,
-                    );
-                }
-                return;
-            }
-            Instruction::Dup => (2, 1, Op::Dup),
-            Instruction::Drop => (0, 1, Op::Drop),
-            Instruction::PushI32(n) => (1, 0, Op::I32(n)),
-            Instruction::PushF32(n) => (1, 0, Op::F32(n)),
-            Instruction::PushBool(b) => (1, 0, Op::Bool(b)),
-            Instruction::PushType(_) => (1, 0, Op::Type),
-            Instruction::PrintChar => (0, 1, Op::PrintChar),
-            Instruction::Print => (
-                0,
-                1,
-                match generics[0] {
-                    Type::I32 => Op::PrintI32,
-                    Type::F32 => Op::PrintF32,
-                    _ => unreachable!(),
-                },
-            ),
-            Instruction::Println => (
-                0,
-                1,
-                match generics[0] {
-                    Type::I32 => Op::PrintlnI32,
-                    Type::F32 => Op::PrintlnF32,
-                    _ => unreachable!(),
-                },
-            ),
-            Instruction::Not => (1, 1, Op::Not),
-            Instruction::Sqrt => (1, 1, Op::Sqrt),
-            Instruction::TypeOf => (1, 1, Op::TypeOf),
-            Instruction::Ptr => (1, 1, Op::Ptr),
-            Instruction::AddrOf => {
-                (1, 1, Op::AddrOf(Box::into_iter(generics).next().unwrap()))
-            }
-            Instruction::ReadPtr => {
-                (1, 1, Op::ReadPtr(Box::into_iter(generics).next().unwrap()))
-            }
-            Instruction::BinMathOp(operation) => (
-                1,
-                2,
-                Op::BinMath {
-                    operation,
-                    typ: Box::into_iter(generics).next(),
-                },
-            ),
-            Instruction::Comparison(comparison) => {
-                (1, 2, Op::Compare(comparison))
-            }
-            Instruction::BinLogicOp(op) => (1, 2, Op::BinLogic(op)),
-            Instruction::Swap => {
-                let a = stack.len() - 2;
-                let b = stack.len() - 1;
-                stack.swap(a, b);
-                return;
-            }
-            Instruction::Nip => {
-                let a = stack.len() - 2;
-                let b = stack.len() - 1;
-                stack.swap(a, b);
-                (0, 1, Op::Drop)
-            }
-            Instruction::Over => {
-                let a = stack.len() - 2;
-                let b = stack.len() - 1;
-                stack.swap(a, b);
-                self.add_instruction(
-                    (
-                        Instruction::Dup,
-                        Box::new([Box::into_iter(generics).next().unwrap()]),
-                    ),
-                    value_generator,
-                    function_signatures,
-                    stack,
-                );
-                let a = stack.len() - 3;
-                let b = stack.len() - 2;
-                stack.swap(a, b);
-                return;
-            }
-            Instruction::Tuck => {
-                self.add_instruction(
-                    (
-                        Instruction::Dup,
-                        Box::new([Box::into_iter(generics).nth(1).unwrap()]),
-                    ),
-                    value_generator,
-                    function_signatures,
-                    stack,
-                );
-                let len = stack.len();
-                stack[len - 3..].rotate_right(1);
-                return;
-            }
-        };
-        let to =
-            value_generator.new_value_sequence(to_count.try_into().unwrap());
-        let remaining_len = stack.len() - arg_count;
-        let args = stack[remaining_len..].into();
-        stack.truncate(remaining_len);
-        stack.extend(to);
-        self.add(Assignment { to, args, op });
-    }
-
-    fn drop(&mut self, value: Value) {
-        self.add(Assignment {
-            to: ValueSequence::default(),
-            args: [value].into(),
-            op: Op::Drop,
-        });
-    }
-
-    fn i32(&mut self, to: Value, n: i32) {
-        self.add(Assignment {
-            to: to.into(),
-            args: [].into(),
-            op: Op::I32(n),
-        });
-    }
-
-    fn f32(&mut self, to: Value, n: f32) {
-        self.add(Assignment {
-            to: to.into(),
-            args: [].into(),
-            op: Op::F32(n),
-        });
-    }
-
-    fn bool(&mut self, to: Value, b: bool) {
-        self.add(Assignment {
-            to: to.into(),
-            args: [].into(),
-            op: Op::Bool(b),
-        });
-    }
-
-    fn add(
-        &mut self,
-        Assignment {
-            to,
-            mut args,
-            mut op,
-        }: Assignment,
-    ) {
-        self.renames.apply_to_slice(&mut args);
-
-        match op {
-            Op::Then(ref mut body) => {
-                let (&condition_value, args) = args.split_last().unwrap();
-                if let Some(Op::Bool(condition)) =
-                    self.graph.source_op(condition_value)
-                {
-                    let condition = *condition;
-                    self.drop(condition_value);
-                    if condition {
-                        self.renames.extend(
-                            body.inputs.iter().zip(args.iter().copied()),
-                        );
-                        for assignment in mem::take(&mut body.assignments) {
-                            self.add(assignment);
-                        }
-                        self.renames.apply_to_slice(&mut body.outputs);
-                        self.renames.extend(
-                            to.iter().zip(body.outputs.iter().copied()),
-                        );
-                    } else {
-                        self.renames
-                            .extend(to.iter().zip(args.iter().copied()));
-                    }
-                    return;
-                }
-            }
-            Op::ThenElse(ref mut then, ref mut else_) => {
-                let (&condition_value, args) = args.split_last().unwrap();
-                if let Some(Op::Bool(condition)) =
-                    self.graph.source_op(condition_value)
-                {
-                    let body = if *condition { then } else { else_ };
-                    self.drop(condition_value);
-                    self.renames
-                        .extend(body.inputs.iter().zip(args.iter().copied()));
-                    for assignment in mem::take(&mut body.assignments) {
-                        self.add(assignment);
-                    }
-                    self.renames.apply_to_slice(&mut body.outputs);
-                    self.renames
-                        .extend(to.iter().zip(body.outputs.iter().copied()));
-                    return;
-                }
-            }
-            Op::Dup => {
-                if let Some(source) = self
-                    .graph
-                    .source_op(args[0])
-                    .filter(|op| op.trivially_dupable())
-                {
-                    let source = source.clone();
-                    self.drop(args[0]);
-                    self.add(Assignment {
-                        to: (to + 0).into(),
-                        args: [].into(),
-                        op: source.clone(),
-                    });
-                    self.add(Assignment {
-                        to: (to + 1).into(),
-                        args: [].into(),
-                        op: source,
-                    });
-                    return;
-                }
-            }
-            Op::BinMath { operation, .. } => {
-                let a = self.graph.source_op(args[0]);
-                let b = self.graph.source_op(args[1]);
-                if let (Some(Op::I32(a)), Some(Op::I32(b))) = (a, b) {
-                    if let Some(res) = match operation {
-                        BinMathOp::Add => a.checked_add(*b),
-                        BinMathOp::Sub => a.checked_sub(*b),
-                        BinMathOp::Mul => a.checked_mul(*b),
-                        BinMathOp::Div => a.checked_div(*b),
-                        BinMathOp::Rem => a.checked_rem(*b),
-                        BinMathOp::SillyAdd => match (*a, *b) {
-                            (9, 10) | (10, 9) => Some(21),
-                            (1, 1) => Some(1),
-                            _ => a.checked_add(*b),
-                        },
-                    } {
-                        self.drop(args[0]);
-                        self.drop(args[1]);
-                        self.i32(to + 0, res);
-                        return;
-                    }
-                } else if let (Some(Op::F32(a)), Some(Op::F32(b))) = (a, b) {
-                    let res = match operation {
-                        BinMathOp::Add => *a + *b,
-                        BinMathOp::Sub => *a - *b,
-                        BinMathOp::Mul => *a * *b,
-                        BinMathOp::Div => *a / *b,
-                        _ => unreachable!(),
-                    };
-                    self.drop(args[0]);
-                    self.drop(args[1]);
-                    self.f32(to + 0, res);
-                    return;
-                }
-            }
-            Op::Compare(comparison) => {
-                let a = self.graph.source_op(args[0]);
-                let b = self.graph.source_op(args[1]);
-                if let (Some(Op::I32(a)), Some(Op::I32(b))) = (a, b) {
-                    let res = match comparison {
-                        Comparison::Lt => *a < *b,
-                        Comparison::Le => *a <= *b,
-                        Comparison::Eq => *a == *b,
-                        Comparison::Ge => *a >= *b,
-                        Comparison::Gt => *a > *b,
-                    };
-                    self.drop(args[0]);
-                    self.drop(args[1]);
-                    self.bool(to + 0, res);
-                    return;
-                }
-            }
-            Op::Sqrt => {
-                if let Some(Op::F32(num)) = self.graph.source_op(args[0]) {
-                    let num = *num;
-                    self.drop(args[0]);
-                    self.f32(to + 0, num.sqrt());
-                    return;
-                }
-            }
-            Op::Not => {
-                if let Some(Op::Bool(operand)) = self.graph.source_op(args[0]) {
-                    let res = !*operand;
-                    self.drop(args[0]);
-                    self.bool(to + 0, res);
-                    return;
-                }
-            }
-            Op::BinLogic(operation) => {
-                use BinLogicOp as B;
-
-                let a = self.graph.source_op(args[0]).and_then(Op::as_bool);
-                let b = self.graph.source_op(args[1]).and_then(Op::as_bool);
-                if let Some(res) = match (operation, a, b) {
-                    (B::And, None, Some(false))
-                    | (B::And, Some(false), None)
-                    | (B::Nor, None, Some(true))
-                    | (B::Nor, Some(true), None) => Some(false),
-                    (B::And, Some(a), Some(b)) => Some(a && b),
-                    (B::Or, None, Some(true))
-                    | (B::Or, Some(true), None)
-                    | (B::Nand, None, Some(false))
-                    | (B::Nand, Some(false), None) => Some(true),
-                    (B::Or, Some(a), Some(b)) => Some(a || b),
-                    (B::Xor, Some(a), Some(b)) => Some(a != b),
-                    (B::Nand, Some(a), Some(b)) => Some(!(a && b)),
-                    (B::Nor, Some(a), Some(b)) => Some(!(a || b)),
-                    (B::Xnor, Some(a), Some(b)) => Some(a == b),
-                    _ => None,
-                } {
-                    self.drop(args[0]);
-                    self.drop(args[1]);
-                    self.bool(to + 0, res);
-                    return;
-                }
-            }
-            _ => {}
-        }
-        self.graph.assignments.push(Assignment { to, args, op });
-    }
-}
-
 pub fn rebuild_graph_inlining(
     graph: &mut Graph,
     function: &Function,
     value_generator: &mut ValueGenerator,
 ) {
-    let mut builder = GraphBuilder {
-        graph,
-        renames: crate::ssa::renaming::Renames::default(),
-    };
-    for assignment in mem::take(&mut builder.graph.assignments) {
+    let mut renames = Renames::default();
+    for assignment in mem::take(&mut graph.assignments) {
         if matches!(&assignment.op, Op::Call(name) if **name == *function.name)
         {
             let mut function = function.body.clone();
             refresh_graph(&mut function, value_generator, false);
 
-            builder.renames.extend(
+            renames.extend(
                 function.inputs.iter().zip(assignment.args.iter().copied()),
             );
             for assignment in &mut function.assignments {
-                builder.renames.apply_to_slice(&mut assignment.args);
+                renames.apply_to_slice(&mut assignment.args);
             }
-            builder.renames.apply_to_slice(&mut function.outputs);
-            builder
-                .renames
-                .extend(assignment.to.iter().zip(function.outputs));
+            renames.apply_to_slice(&mut function.outputs);
+            renames.extend(assignment.to.iter().zip(function.outputs));
 
             for assignment in function.assignments {
-                builder.add(assignment);
+                graph.add(assignment, &mut renames);
             }
         } else {
-            builder.add(assignment);
+            graph.add(assignment, &mut renames);
         }
     }
-    builder.renames.apply_to_slice(&mut builder.graph.outputs);
+    renames.apply_to_slice(&mut graph.outputs);
 }
 
 fn refresh_graph(
