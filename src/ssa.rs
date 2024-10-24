@@ -10,7 +10,7 @@ use renaming::Renames;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt, mem,
-    ops::{ControlFlow, Range},
+    ops::ControlFlow,
 };
 
 pub struct Program<'src> {
@@ -107,10 +107,6 @@ impl ValueSequence {
         ValueSequenceIter(self)
     }
 
-    fn range(self) -> Range<Value> {
-        Value(self.start)..Value(self.start + u32::from(self.count))
-    }
-
     const fn count(self) -> u8 {
         self.count
     }
@@ -178,14 +174,6 @@ impl Graph {
         renames.apply_to_slice(&mut stack);
         graph.outputs = stack;
         graph
-    }
-
-    fn source_op(&self, value: Value) -> Option<&Op> {
-        // TODO: reduce time complexity
-        self.assignments
-            .iter()
-            .find(|assignment| assignment.to.range().contains(&value))
-            .map(|assignment| &assignment.op)
     }
 
     pub fn is_small_enough_to_inline(&self) -> bool {
@@ -395,218 +383,9 @@ impl Graph {
         self.add(Assignment { to, args, op }, renames);
     }
 
-    fn drop(&mut self, value: Value, renames: &mut Renames) {
-        self.add(
-            Assignment {
-                to: ValueSequence::default(),
-                args: [value].into(),
-                op: Op::Drop,
-            },
-            renames,
-        );
-    }
-
-    fn i32(&mut self, to: Value, n: i32) {
-        self.assignments.push(Assignment {
-            to: to.into(),
-            args: [].into(),
-            op: Op::I32(n),
-        });
-    }
-
-    fn f32(&mut self, to: Value, n: f32) {
-        self.assignments.push(Assignment {
-            to: to.into(),
-            args: [].into(),
-            op: Op::F32(n),
-        });
-    }
-
-    fn bool(&mut self, to: Value, b: bool) {
-        self.assignments.push(Assignment {
-            to: to.into(),
-            args: [].into(),
-            op: Op::Bool(b),
-        });
-    }
-
-    fn add(
-        &mut self,
-        Assignment {
-            to,
-            mut args,
-            mut op,
-        }: Assignment,
-        renames: &mut Renames,
-    ) {
-        renames.apply_to_slice(&mut args);
-
-        match op {
-            Op::Then(ref mut body) => {
-                let (&condition_value, args) = args.split_last().unwrap();
-                if let Some(Op::Bool(condition)) =
-                    self.source_op(condition_value)
-                {
-                    let condition = *condition;
-                    self.drop(condition_value, renames);
-                    if condition {
-                        renames.extend(
-                            body.inputs.iter().zip(args.iter().copied()),
-                        );
-                        for assignment in mem::take(&mut body.assignments) {
-                            self.add(assignment, renames);
-                        }
-                        renames.apply_to_slice(&mut body.outputs);
-                        renames.extend(
-                            to.iter().zip(body.outputs.iter().copied()),
-                        );
-                    } else {
-                        renames.extend(to.iter().zip(args.iter().copied()));
-                    }
-                    return;
-                }
-            }
-            Op::ThenElse(ref mut then, ref mut else_) => {
-                let (&condition_value, args) = args.split_last().unwrap();
-                if let Some(Op::Bool(condition)) =
-                    self.source_op(condition_value)
-                {
-                    let body = if *condition { then } else { else_ };
-                    self.drop(condition_value, renames);
-                    renames
-                        .extend(body.inputs.iter().zip(args.iter().copied()));
-                    for assignment in mem::take(&mut body.assignments) {
-                        self.add(assignment, renames);
-                    }
-                    renames.apply_to_slice(&mut body.outputs);
-                    renames.extend(to.iter().zip(body.outputs.iter().copied()));
-                    return;
-                }
-            }
-            Op::Dup => {
-                if let Some(source) =
-                    self.source_op(args[0]).filter(|op| op.trivially_dupable())
-                {
-                    let source = source.clone();
-                    self.drop(args[0], renames);
-                    self.add(
-                        Assignment {
-                            to: (to + 0).into(),
-                            args: [].into(),
-                            op: source.clone(),
-                        },
-                        renames,
-                    );
-                    self.add(
-                        Assignment {
-                            to: (to + 1).into(),
-                            args: [].into(),
-                            op: source,
-                        },
-                        renames,
-                    );
-                    return;
-                }
-            }
-            Op::BinMath { operation, .. } => {
-                let a = self.source_op(args[0]);
-                let b = self.source_op(args[1]);
-                if let (Some(Op::I32(a)), Some(Op::I32(b))) = (a, b) {
-                    if let Some(res) = match operation {
-                        BinMathOp::Add => a.checked_add(*b),
-                        BinMathOp::Sub => a.checked_sub(*b),
-                        BinMathOp::Mul => a.checked_mul(*b),
-                        BinMathOp::Div => a.checked_div(*b),
-                        BinMathOp::Rem => a.checked_rem(*b),
-                        BinMathOp::SillyAdd => match (*a, *b) {
-                            (9, 10) | (10, 9) => Some(21),
-                            (1, 1) => Some(1),
-                            _ => a.checked_add(*b),
-                        },
-                    } {
-                        self.drop(args[0], renames);
-                        self.drop(args[1], renames);
-                        self.i32(to + 0, res);
-                        return;
-                    }
-                } else if let (Some(Op::F32(a)), Some(Op::F32(b))) = (a, b) {
-                    let res = match operation {
-                        BinMathOp::Add => *a + *b,
-                        BinMathOp::Sub => *a - *b,
-                        BinMathOp::Mul => *a * *b,
-                        BinMathOp::Div => *a / *b,
-                        _ => unreachable!(),
-                    };
-                    self.drop(args[0], renames);
-                    self.drop(args[1], renames);
-                    self.f32(to + 0, res);
-                    return;
-                }
-            }
-            Op::Compare(comparison) => {
-                let a = self.source_op(args[0]);
-                let b = self.source_op(args[1]);
-                if let (Some(Op::I32(a)), Some(Op::I32(b))) = (a, b) {
-                    let res = match comparison {
-                        Comparison::Lt => *a < *b,
-                        Comparison::Le => *a <= *b,
-                        Comparison::Eq => *a == *b,
-                        Comparison::Ge => *a >= *b,
-                        Comparison::Gt => *a > *b,
-                    };
-                    self.drop(args[0], renames);
-                    self.drop(args[1], renames);
-                    self.bool(to + 0, res);
-                    return;
-                }
-            }
-            Op::Sqrt => {
-                if let Some(Op::F32(num)) = self.source_op(args[0]) {
-                    let num = *num;
-                    self.drop(args[0], renames);
-                    self.f32(to + 0, num.sqrt());
-                    return;
-                }
-            }
-            Op::Not => {
-                if let Some(Op::Bool(operand)) = self.source_op(args[0]) {
-                    let res = !*operand;
-                    self.drop(args[0], renames);
-                    self.bool(to + 0, res);
-                    return;
-                }
-            }
-            Op::BinLogic(operation) => {
-                use BinLogicOp as B;
-
-                let a = self.source_op(args[0]).and_then(Op::as_bool);
-                let b = self.source_op(args[1]).and_then(Op::as_bool);
-                if let Some(res) = match (operation, a, b) {
-                    (B::And, None, Some(false))
-                    | (B::And, Some(false), None)
-                    | (B::Nor, None, Some(true))
-                    | (B::Nor, Some(true), None) => Some(false),
-                    (B::And, Some(a), Some(b)) => Some(a && b),
-                    (B::Or, None, Some(true))
-                    | (B::Or, Some(true), None)
-                    | (B::Nand, None, Some(false))
-                    | (B::Nand, Some(false), None) => Some(true),
-                    (B::Or, Some(a), Some(b)) => Some(a || b),
-                    (B::Xor, Some(a), Some(b)) => Some(a != b),
-                    (B::Nand, Some(a), Some(b)) => Some(!(a && b)),
-                    (B::Nor, Some(a), Some(b)) => Some(!(a || b)),
-                    (B::Xnor, Some(a), Some(b)) => Some(a == b),
-                    _ => None,
-                } {
-                    self.drop(args[0], renames);
-                    self.drop(args[1], renames);
-                    self.bool(to + 0, res);
-                    return;
-                }
-            }
-            _ => {}
-        }
-        self.assignments.push(Assignment { to, args, op });
+    fn add(&mut self, mut assignment: Assignment, renames: &mut Renames) {
+        renames.apply_to_slice(&mut assignment.args);
+        self.assignments.push(assignment);
     }
 }
 
@@ -655,10 +434,6 @@ pub enum Op {
 }
 
 impl Op {
-    const fn trivially_dupable(&self) -> bool {
-        matches!(self, Self::I32(_) | Self::F32(_) | Self::Bool(_))
-    }
-
     const fn pure(&self) -> bool {
         // Most operations are pure, so it's more convenient to list the
         // *impure* ones.
@@ -676,14 +451,6 @@ impl Op {
                 // Division by zero and maybe overflow?
                 | Self::BinMath { typ: Some(Type::I32), .. }
         )
-    }
-
-    const fn as_bool(&self) -> Option<bool> {
-        if let Self::Bool(v) = *self {
-            Some(v)
-        } else {
-            None
-        }
     }
 }
 
