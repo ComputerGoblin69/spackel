@@ -1,5 +1,9 @@
 #![forbid(unsafe_code)]
-#![deny(clippy::allow_attributes, clippy::allow_attributes_without_reason)]
+#![deny(
+    clippy::allow_attributes,
+    clippy::allow_attributes_without_reason,
+    clippy::iter_over_hash_type
+)]
 #![warn(clippy::nursery, clippy::pedantic)]
 
 mod call_graph;
