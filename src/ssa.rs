@@ -475,9 +475,7 @@ impl GraphBuilder<'_> {
         stack.extend(to);
         self.add(Assignment { to, args, op });
     }
-}
 
-impl GraphBuilder<'_> {
     fn drop(&mut self, value: Value) {
         self.add(Assignment {
             to: ValueSequence::default(),
