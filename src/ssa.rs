@@ -166,12 +166,12 @@ impl Graph {
         let mut stack = inputs.iter().collect();
         let mut builder = GraphBuilder {
             graph: &mut graph,
-            value_generator,
             renames: renaming::Renames::default(),
         };
         for instruction in block {
             builder.add_instruction(
                 instruction,
+                value_generator,
                 function_signatures,
                 &mut stack,
             );
@@ -307,7 +307,6 @@ impl Op {
 
 struct GraphBuilder<'g> {
     graph: &'g mut Graph,
-    value_generator: &'g mut ValueGenerator,
     renames: renaming::Renames,
 }
 
@@ -315,6 +314,7 @@ impl GraphBuilder<'_> {
     fn add_instruction(
         &mut self,
         (instruction, generics): (Instruction<Generics>, Generics),
+        value_generator: &mut ValueGenerator,
         function_signatures: &BTreeMap<&str, FunctionSignature>,
         stack: &mut Vec<Value>,
     ) {
@@ -332,7 +332,7 @@ impl GraphBuilder<'_> {
                     body,
                     (stack.len() - 1).try_into().unwrap(),
                     function_signatures,
-                    self.value_generator,
+                    value_generator,
                 );
                 (stack.len() - 1, stack.len(), Op::Then(Box::new(body_graph)))
             }
@@ -341,13 +341,13 @@ impl GraphBuilder<'_> {
                     then,
                     (stack.len() - 1).try_into().unwrap(),
                     function_signatures,
-                    self.value_generator,
+                    value_generator,
                 );
                 let else_graph = Graph::from_block(
                     else_,
                     (stack.len() - 1).try_into().unwrap(),
                     function_signatures,
-                    self.value_generator,
+                    value_generator,
                 );
                 (
                     then_graph.outputs.len(),
@@ -360,7 +360,7 @@ impl GraphBuilder<'_> {
                     body,
                     stack.len().try_into().unwrap(),
                     function_signatures,
-                    self.value_generator,
+                    value_generator,
                 );
                 (stack.len(), stack.len(), Op::Repeat(Box::new(body_graph)))
             }
@@ -368,6 +368,7 @@ impl GraphBuilder<'_> {
                 for instruction in body {
                     self.add_instruction(
                         instruction,
+                        value_generator,
                         function_signatures,
                         stack,
                     );
@@ -442,6 +443,7 @@ impl GraphBuilder<'_> {
                         Instruction::Dup,
                         Box::new([Box::into_iter(generics).next().unwrap()]),
                     ),
+                    value_generator,
                     function_signatures,
                     stack,
                 );
@@ -456,6 +458,7 @@ impl GraphBuilder<'_> {
                         Instruction::Dup,
                         Box::new([Box::into_iter(generics).nth(1).unwrap()]),
                     ),
+                    value_generator,
                     function_signatures,
                     stack,
                 );
@@ -464,9 +467,8 @@ impl GraphBuilder<'_> {
                 return;
             }
         };
-        let to = self
-            .value_generator
-            .new_value_sequence(to_count.try_into().unwrap());
+        let to =
+            value_generator.new_value_sequence(to_count.try_into().unwrap());
         let remaining_len = stack.len() - arg_count;
         let args = stack[remaining_len..].into();
         stack.truncate(remaining_len);
@@ -692,14 +694,13 @@ pub fn rebuild_graph_inlining(
 ) {
     let mut builder = GraphBuilder {
         graph,
-        value_generator,
         renames: crate::ssa::renaming::Renames::default(),
     };
     for assignment in mem::take(&mut builder.graph.assignments) {
         if matches!(&assignment.op, Op::Call(name) if **name == *function.name)
         {
             let mut function = function.body.clone();
-            refresh_graph(&mut function, builder.value_generator, false);
+            refresh_graph(&mut function, value_generator, false);
 
             builder.renames.extend(
                 function.inputs.iter().zip(assignment.args.iter().copied()),
