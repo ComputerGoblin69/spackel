@@ -478,7 +478,7 @@ fn refresh_graph(
     value_generator: &mut ValueGenerator,
     including_inputs: bool,
 ) {
-    let mut renames = renaming::Renames::default();
+    let mut renames = BTreeMap::<Value, Value>::new();
 
     if including_inputs {
         let inputs = value_generator.new_value_sequence(graph.inputs.count());
@@ -487,7 +487,11 @@ fn refresh_graph(
     }
 
     for assignment in &mut graph.assignments {
-        renames.apply_to_slice(&mut assignment.args);
+        for arg in &mut assignment.args {
+            if let Some(&new) = renames.get(arg) {
+                *arg = new;
+            }
+        }
         let to = value_generator.new_value_sequence(assignment.to.count());
         renames.extend(std::iter::zip(assignment.to, to));
         assignment.to = to;
@@ -504,7 +508,11 @@ fn refresh_graph(
         }
     }
 
-    renames.apply_to_slice(&mut graph.outputs);
+    for output in &mut graph.outputs {
+        if let Some(&new) = renames.get(output) {
+            *output = new;
+        }
+    }
 }
 
 pub fn propagate_drops(graph: &mut Graph) -> bool {
