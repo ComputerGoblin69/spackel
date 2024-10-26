@@ -2,7 +2,6 @@ use crate::{
     ir::{BinLogicOp, BinMathOp, Block, Comparison, Instruction},
     typ::{FunctionSignature, Generics, Type},
 };
-use itertools::Itertools;
 use std::{collections::BTreeMap, fmt, ops::ControlFlow};
 
 pub struct Program<'src> {
@@ -18,11 +17,8 @@ pub fn convert<'src>(
         .function_bodies
         .into_iter()
         .map(|(name, body)| {
-            let input_count = program.function_signatures[&name]
-                .parameters
-                .len()
-                .try_into()
-                .unwrap();
+            let input_count =
+                program.function_signatures[&name].parameters.len();
             let body = Graph::from_block(
                 body,
                 input_count,
@@ -48,107 +44,42 @@ impl fmt::Debug for Var {
     }
 }
 
-#[derive(Clone, Copy, Default)]
-pub struct VarSequence {
-    start: u32,
-    count: u8,
-}
-
-impl fmt::Debug for VarSequence {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "[{:?}]",
-            (self.start..self.start + u32::from(self.count))
-                .map(Var)
-                .format(", ")
-        )
-    }
-}
-
-impl From<Var> for VarSequence {
-    fn from(value: Var) -> Self {
-        Self {
-            start: value.0,
-            count: 1,
-        }
-    }
-}
-
-impl IntoIterator for VarSequence {
-    type Item = Var;
-
-    type IntoIter = VarSequenceIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
-impl std::ops::Add<u8> for VarSequence {
-    type Output = Var;
-
-    fn add(self, rhs: u8) -> Self::Output {
-        debug_assert!(rhs < self.count);
-        Var(self.start + u32::from(rhs))
-    }
-}
-
-impl VarSequence {
-    const fn iter(self) -> VarSequenceIter {
-        VarSequenceIter(self)
-    }
-}
-
-pub struct VarSequenceIter(VarSequence);
-
-impl Iterator for VarSequenceIter {
-    type Item = Var;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.0.count == 0 {
-            None
-        } else {
-            let res = Var(self.0.start);
-            self.0.start += 1;
-            self.0.count -= 1;
-            Some(res)
-        }
-    }
-}
-
 #[derive(Default)]
 pub struct VarGenerator(u32);
 
 impl VarGenerator {
-    pub fn new_var_sequence(&mut self, count: u8) -> VarSequence {
-        let start = self.0;
-        self.0 += u32::from(count);
-        VarSequence { start, count }
+    fn new_var(&mut self) -> Var {
+        let res = Var(self.0);
+        self.0 += 1;
+        res
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Graph {
-    pub inputs: VarSequence,
-    pub assignments: Vec<Assignment>,
-    pub outputs: Vec<Var>,
+    pub ops: Vec<Op>,
+    pub defs: BTreeMap<Var, Def>,
+    pub uses: BTreeMap<Var, Use>,
+    output_count: usize,
 }
 
 impl Graph {
     pub fn from_block(
         block: Box<Block<Generics>>,
-        input_count: u8,
+        input_count: usize,
         function_signatures: &BTreeMap<&str, FunctionSignature>,
         var_generator: &mut VarGenerator,
     ) -> Self {
-        let inputs = var_generator.new_var_sequence(input_count);
-        let mut graph = Self {
-            inputs,
-            assignments: Vec::new(),
-            outputs: Vec::new(),
-        };
-        let mut stack = inputs.iter().collect();
+        let mut graph = Self::default();
+
+        let mut stack = (0..input_count)
+            .map(|input_index| {
+                let input = var_generator.new_var();
+                graph.defs.insert(input, Def::Input { index: input_index });
+                input
+            })
+            .collect();
+
         for instruction in block {
             graph.add_instruction(
                 instruction,
@@ -157,7 +88,15 @@ impl Graph {
                 &mut stack,
             );
         }
-        graph.outputs = stack;
+
+        graph.output_count = stack.len();
+        graph.uses.extend(
+            stack
+                .into_iter()
+                .enumerate()
+                .map(|(index, var)| (var, Use::Output { index })),
+        );
+
         graph
     }
 
@@ -165,8 +104,7 @@ impl Graph {
         &self,
         f: &mut impl FnMut(&Op) -> ControlFlow<B>,
     ) -> ControlFlow<B> {
-        for assignment in &self.assignments {
-            let op = &assignment.op;
+        for op in &self.ops {
             f(op)?;
             match op {
                 Op::ThenElse(then, else_) => {
@@ -189,7 +127,7 @@ impl Graph {
         function_signatures: &BTreeMap<&str, FunctionSignature>,
         stack: &mut Vec<Var>,
     ) {
-        let (to_count, arg_count, op) = match instruction {
+        let (result_count, arg_count, op) = match instruction {
             Instruction::Call(name) => {
                 let signature = &function_signatures[&*name];
                 (
@@ -201,7 +139,7 @@ impl Graph {
             Instruction::Then(body) => {
                 let body_graph = Self::from_block(
                     body,
-                    (stack.len() - 1).try_into().unwrap(),
+                    stack.len() - 1,
                     function_signatures,
                     var_generator,
                 );
@@ -210,18 +148,18 @@ impl Graph {
             Instruction::ThenElse(then, else_) => {
                 let then_graph = Self::from_block(
                     then,
-                    (stack.len() - 1).try_into().unwrap(),
+                    stack.len() - 1,
                     function_signatures,
                     var_generator,
                 );
                 let else_graph = Self::from_block(
                     else_,
-                    (stack.len() - 1).try_into().unwrap(),
+                    stack.len() - 1,
                     function_signatures,
                     var_generator,
                 );
                 (
-                    then_graph.outputs.len(),
+                    then_graph.output_count,
                     stack.len(),
                     Op::ThenElse(Box::new(then_graph), Box::new(else_graph)),
                 )
@@ -229,7 +167,7 @@ impl Graph {
             Instruction::Repeat { body, .. } => {
                 let body_graph = Self::from_block(
                     body,
-                    stack.len().try_into().unwrap(),
+                    stack.len(),
                     function_signatures,
                     var_generator,
                 );
@@ -338,26 +276,49 @@ impl Graph {
                 return;
             }
         };
-        let to = var_generator.new_var_sequence(to_count.try_into().unwrap());
+
+        let op_index = self.ops.len();
+        self.ops.push(op);
+
         let remaining_len = stack.len() - arg_count;
-        let args = stack[remaining_len..].into();
-        stack.truncate(remaining_len);
-        stack.extend(to);
-        self.assignments.push(Assignment { to, args, op });
+        self.uses.extend(
+            stack.split_off(remaining_len).into_iter().enumerate().map(
+                |(arg_index, arg)| {
+                    (
+                        arg,
+                        Use::Op {
+                            index: op_index,
+                            sub_index: arg_index,
+                        },
+                    )
+                },
+            ),
+        );
+
+        for sub_index in 0..result_count {
+            let result = var_generator.new_var();
+            self.defs.insert(
+                result,
+                Def::Op {
+                    index: op_index,
+                    sub_index,
+                },
+            );
+            stack.push(result);
+        }
     }
 }
 
-#[derive(Clone)]
-pub struct Assignment {
-    pub to: VarSequence,
-    pub args: Box<[Var]>,
-    pub op: Op,
+#[derive(Clone, Debug)]
+pub enum Def {
+    Input { index: usize },
+    Op { index: usize, sub_index: usize },
 }
 
-impl fmt::Debug for Assignment {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?} <- {:?} {:#?}", self.to, self.args, self.op)
-    }
+#[derive(Clone, Debug)]
+pub enum Use {
+    Op { index: usize, sub_index: usize },
+    Output { index: usize },
 }
 
 #[derive(Clone, Debug)]

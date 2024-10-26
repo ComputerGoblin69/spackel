@@ -71,7 +71,6 @@ pub fn compile(
     let mut compiler = Compiler {
         function_ids,
         clif_function_signatures,
-        ssa_values: BTreeMap::new(),
         isa: &*isa,
         object_module,
         extern_functions: BTreeMap::new(),
@@ -89,7 +88,6 @@ pub fn compile(
 struct Compiler<'a> {
     clif_function_signatures: BTreeMap<&'a str, Signature>,
     function_ids: BTreeMap<&'a str, FuncId>,
-    ssa_values: BTreeMap<ssa::Var, Value>,
     isa: &'a dyn TargetIsa,
     object_module: ObjectModule,
     extern_functions: BTreeMap<&'static str, FuncId>,
@@ -97,16 +95,6 @@ struct Compiler<'a> {
 }
 
 impl Compiler<'_> {
-    fn take(&mut self, value: ssa::Var) -> Value {
-        self.ssa_values
-            .remove(&value)
-            .unwrap_or_else(|| panic!("{value:?} is not defined"))
-    }
-
-    fn set(&mut self, value: ssa::Var, clif_value: Value) {
-        self.ssa_values.insert(value, clif_value);
-    }
-
     fn call_extern(
         &mut self,
         func_name: &'static str,
@@ -161,25 +149,17 @@ impl Compiler<'_> {
         let mut fb = FunctionBuilder::new(&mut ctx.func, func_ctx);
         let block = fb.create_block();
         fb.append_block_params_for_function_params(block);
-        for (ssa_value, &param) in
-            std::iter::zip(body.inputs, fb.block_params(block))
-        {
-            self.set(ssa_value, param);
-        }
         fb.switch_to_block(block);
         fb.seal_block(block);
 
-        for assignment in &body.assignments {
-            self.compile_assignment(assignment, &mut fb);
+        let inputs = Box::from(fb.block_params(block));
+        let mut outputs = self.compile_graph(body, &inputs, &mut fb);
+
+        if name == "main" {
+            // Exit code
+            outputs.push(fb.ins().iconst(I32, 0));
         }
 
-        let outputs = body
-            .outputs
-            .iter()
-            .map(|output| self.ssa_values[output])
-            // Exit code
-            .chain((name == "main").then(|| fb.ins().iconst(I32, 0)))
-            .collect::<Vec<_>>();
         fb.ins().return_(&outputs);
 
         fb.finalize();
@@ -188,153 +168,159 @@ impl Compiler<'_> {
         Ok(())
     }
 
-    fn compile_assignment(
+    fn compile_graph(
         &mut self,
-        assignment: &ssa::Assignment,
+        graph: &ssa::Graph,
+        inputs: &[Value],
         fb: &mut FunctionBuilder,
-    ) {
-        let to = assignment.to;
-        let args = &assignment.args;
-        match &assignment.op {
+    ) -> Vec<Value> {
+        let mut clif_values = graph
+            .defs
+            .iter()
+            .filter_map(|(&var, def)| match *def {
+                ssa::Def::Input { index } => Some((var, inputs[index])),
+                ssa::Def::Op { .. } => None,
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        for (op_index, op) in graph.ops.iter().enumerate() {
+            let args_by_index = graph
+                .uses
+                .iter()
+                .filter_map(|(var, use_)| match *use_ {
+                    ssa::Use::Op { index, sub_index } if index == op_index => {
+                        Some((sub_index, clif_values[var]))
+                    }
+                    _ => None,
+                })
+                .collect::<BTreeMap<_, _>>();
+            let args = args_by_index.values().copied().collect::<Box<_>>();
+
+            let outputs = self.compile_op(op, &args, fb);
+
+            clif_values.extend(graph.defs.iter().filter_map(|(&var, def)| {
+                match *def {
+                    ssa::Def::Op { index, sub_index } if index == op_index => {
+                        Some((var, outputs[sub_index]))
+                    }
+                    _ => None,
+                }
+            }));
+        }
+
+        let outputs_by_index = graph
+            .uses
+            .iter()
+            .filter_map(|(var, use_)| match *use_ {
+                ssa::Use::Output { index } => Some((index, clif_values[var])),
+                ssa::Use::Op { .. } => None,
+            })
+            .collect::<BTreeMap<_, _>>();
+        outputs_by_index.values().copied().collect()
+    }
+
+    fn compile_op(
+        &mut self,
+        op: &ssa::Op,
+        args: &[Value],
+        fb: &mut FunctionBuilder,
+    ) -> Vec<Value> {
+        match op {
             Op::Call(name) => {
                 let func_id = self.function_ids[&**name];
                 let func_ref =
                     self.object_module.declare_func_in_func(func_id, fb.func);
-                let call_args =
-                    args.iter().map(|&arg| self.take(arg)).collect::<Vec<_>>();
-                let inst = fb.ins().call(func_ref, &call_args);
-                for (value, &res) in std::iter::zip(to, fb.inst_results(inst)) {
-                    self.set(value, res);
-                }
+                let inst = fb.ins().call(func_ref, args);
+                fb.inst_results(inst).into()
             }
-            Op::Then(body) => self.compile_then(to, args, body, fb),
+            Op::Then(body) => self.compile_then(args, body, fb),
             Op::ThenElse(then, else_) => {
-                self.compile_then_else(to, args, then, else_, fb);
+                self.compile_then_else(args, then, else_, fb)
             }
-            Op::Repeat(body) => self.compile_repeat(to, args, body, fb),
-            Op::Dup => {
-                let v = self.take(args[0]);
-                self.ssa_values.insert(to + 0, v);
-                self.ssa_values.insert(to + 1, v);
-            }
-            Op::Drop => {
-                self.take(args[0]);
-            }
+            Op::Repeat(body) => self.compile_repeat(args, body, fb),
+            Op::Dup => args.repeat(2),
+            Op::Drop => Vec::new(),
             Op::I32(number) => {
-                self.set(to + 0, fb.ins().iconst(I32, i64::from(*number)));
+                Vec::from([fb.ins().iconst(I32, i64::from(*number))])
             }
-            Op::F32(number) => {
-                self.set(to + 0, fb.ins().f32const(*number));
-            }
-            Op::Bool(b) => {
-                self.set(to + 0, fb.ins().iconst(I8, i64::from(*b)));
-            }
+            Op::F32(number) => Vec::from([fb.ins().f32const(*number)]),
+            Op::Bool(b) => Vec::from([fb.ins().iconst(I8, i64::from(*b))]),
             Op::Type | Op::TypeOf | Op::Ptr => todo!(),
             Op::PrintChar => {
-                let n = self.take(args[0]);
-                self.call_extern("spkl_print_char", &[n], fb);
+                self.call_extern("spkl_print_char", args, fb);
+                Vec::new()
             }
             Op::PrintI32 => {
-                let n = self.take(args[0]);
-                self.call_extern("spkl_print_i32", &[n], fb);
+                self.call_extern("spkl_print_i32", args, fb);
+                Vec::new()
             }
             Op::PrintF32 => {
-                let n = self.take(args[0]);
-                self.call_extern("spkl_print_f32", &[n], fb);
+                self.call_extern("spkl_print_f32", args, fb);
+                Vec::new()
             }
             Op::PrintlnI32 => {
-                let n = self.take(args[0]);
-                self.call_extern("spkl_println_i32", &[n], fb);
+                self.call_extern("spkl_println_i32", args, fb);
+                Vec::new()
             }
             Op::PrintlnF32 => {
-                let n = self.take(args[0]);
-                self.call_extern("spkl_println_f32", &[n], fb);
+                self.call_extern("spkl_println_f32", args, fb);
+                Vec::new()
             }
             Op::BinMath { operation, typ } => {
-                let a = self.take(args[0]);
-                let b = self.take(args[1]);
-                self.set(
-                    to + 0,
-                    match (operation, typ) {
-                        (BinMathOp::Add, Some(Type::I32)) => {
-                            fb.ins().iadd(a, b)
-                        }
-                        (BinMathOp::Sub, Some(Type::I32)) => {
-                            fb.ins().isub(a, b)
-                        }
-                        (BinMathOp::Mul, Some(Type::I32)) => {
-                            fb.ins().imul(a, b)
-                        }
-                        (BinMathOp::Div, Some(Type::I32)) => {
-                            fb.ins().sdiv(a, b)
-                        }
-                        (BinMathOp::Rem, _) => fb.ins().srem(a, b),
-                        (BinMathOp::SillyAdd, _) => todo!(),
-                        (BinMathOp::Add, Some(Type::F32)) => {
-                            fb.ins().fadd(a, b)
-                        }
-                        (BinMathOp::Sub, Some(Type::F32)) => {
-                            fb.ins().fsub(a, b)
-                        }
-                        (BinMathOp::Mul, Some(Type::F32)) => {
-                            fb.ins().fmul(a, b)
-                        }
-                        (BinMathOp::Div, Some(Type::F32)) => {
-                            fb.ins().fdiv(a, b)
-                        }
-                        _ => unreachable!(),
-                    },
-                );
+                let a = args[0];
+                let b = args[1];
+                let res = match (operation, typ) {
+                    (BinMathOp::Add, Some(Type::I32)) => fb.ins().iadd(a, b),
+                    (BinMathOp::Sub, Some(Type::I32)) => fb.ins().isub(a, b),
+                    (BinMathOp::Mul, Some(Type::I32)) => fb.ins().imul(a, b),
+                    (BinMathOp::Div, Some(Type::I32)) => fb.ins().sdiv(a, b),
+                    (BinMathOp::Rem, _) => fb.ins().srem(a, b),
+                    (BinMathOp::SillyAdd, _) => todo!(),
+                    (BinMathOp::Add, Some(Type::F32)) => fb.ins().fadd(a, b),
+                    (BinMathOp::Sub, Some(Type::F32)) => fb.ins().fsub(a, b),
+                    (BinMathOp::Mul, Some(Type::F32)) => fb.ins().fmul(a, b),
+                    (BinMathOp::Div, Some(Type::F32)) => fb.ins().fdiv(a, b),
+                    _ => unreachable!(),
+                };
+                Vec::from([res])
             }
-            Op::Sqrt => {
-                let n = self.take(args[0]);
-                self.set(to + 0, fb.ins().sqrt(n));
-            }
+            Op::Sqrt => Vec::from([fb.ins().sqrt(args[0])]),
             Op::Compare(comparison) => {
-                let a = self.take(args[0]);
-                let b = self.take(args[1]);
-                self.set(
-                    to + 0,
-                    fb.ins().icmp(
-                        match comparison {
-                            Comparison::Lt => IntCC::SignedLessThan,
-                            Comparison::Le => IntCC::SignedLessThanOrEqual,
-                            Comparison::Eq => IntCC::Equal,
-                            Comparison::Ge => IntCC::SignedGreaterThanOrEqual,
-                            Comparison::Gt => IntCC::SignedGreaterThan,
-                        },
-                        a,
-                        b,
-                    ),
-                );
-            }
-            Op::Not => {
-                let b = self.take(args[0]);
-                self.set(to + 0, fb.ins().bxor_imm(b, 1));
-            }
-            Op::BinLogic(op) => {
-                let a = self.take(args[0]);
-                let b = self.take(args[1]);
-                self.set(
-                    to + 0,
-                    match op {
-                        BinLogicOp::And => fb.ins().band(a, b),
-                        BinLogicOp::Or => fb.ins().bor(a, b),
-                        BinLogicOp::Xor => fb.ins().bxor(a, b),
-                        BinLogicOp::Nand => {
-                            let res = fb.ins().band(a, b);
-                            fb.ins().bxor_imm(res, 1)
-                        }
-                        BinLogicOp::Nor => {
-                            let res = fb.ins().bor(a, b);
-                            fb.ins().bxor_imm(res, 1)
-                        }
-                        BinLogicOp::Xnor => {
-                            let res = fb.ins().bxor(a, b);
-                            fb.ins().bxor_imm(res, 1)
-                        }
+                let res = fb.ins().icmp(
+                    match comparison {
+                        Comparison::Lt => IntCC::SignedLessThan,
+                        Comparison::Le => IntCC::SignedLessThanOrEqual,
+                        Comparison::Eq => IntCC::Equal,
+                        Comparison::Ge => IntCC::SignedGreaterThanOrEqual,
+                        Comparison::Gt => IntCC::SignedGreaterThan,
                     },
+                    args[0],
+                    args[1],
                 );
+                Vec::from([res])
+            }
+            Op::Not => Vec::from([fb.ins().bxor_imm(args[0], 1)]),
+            Op::BinLogic(op) => {
+                let a = args[0];
+                let b = args[1];
+                let res = match op {
+                    BinLogicOp::And => fb.ins().band(a, b),
+                    BinLogicOp::Or => fb.ins().bor(a, b),
+                    BinLogicOp::Xor => fb.ins().bxor(a, b),
+                    BinLogicOp::Nand => {
+                        let res = fb.ins().band(a, b);
+                        fb.ins().bxor_imm(res, 1)
+                    }
+                    BinLogicOp::Nor => {
+                        let res = fb.ins().bor(a, b);
+                        fb.ins().bxor_imm(res, 1)
+                    }
+                    BinLogicOp::Xnor => {
+                        let res = fb.ins().bxor(a, b);
+                        fb.ins().bxor_imm(res, 1)
+                    }
+                };
+                Vec::from([res])
             }
             Op::AddrOf(typ) => {
                 let typ = typ.to_clif(self.isa).unwrap();
@@ -342,186 +328,119 @@ impl Compiler<'_> {
                     kind: StackSlotKind::ExplicitSlot,
                     size: typ.bytes(),
                 });
-                let v = self.take(args[0]);
-                self.set(to + 0, v);
+                let v = args[0];
                 fb.ins().stack_store(v, stack_slot, 0);
-                self.set(
-                    to + 1,
-                    fb.ins().stack_addr(self.isa.pointer_type(), stack_slot, 0),
-                );
+                let res =
+                    fb.ins().stack_addr(self.isa.pointer_type(), stack_slot, 0);
+                Vec::from([v, res])
             }
             Op::ReadPtr(typ) => {
-                let ptr = self.take(args[0]);
                 let typ = typ.to_clif(self.isa).unwrap();
-                self.set(
-                    to + 0,
-                    fb.ins().load(typ, MemFlags::trusted(), ptr, 0),
-                );
+                let res = fb.ins().load(typ, MemFlags::trusted(), args[0], 0);
+                Vec::from([res])
             }
         }
     }
 
     fn compile_then(
         &mut self,
-        to: ssa::VarSequence,
-        args: &[ssa::Var],
+        args: &[Value],
         body: &ssa::Graph,
         fb: &mut FunctionBuilder,
-    ) {
+    ) -> Vec<Value> {
         let (&condition, args) = args.split_last().unwrap();
-
-        for (arg, input) in std::iter::zip(args, body.inputs) {
-            let clif_value = self.ssa_values[arg];
-            self.set(input, clif_value);
-        }
 
         let then = fb.create_block();
         let after = fb.create_block();
 
-        let condition = self.take(condition);
-        fb.ins().brif(
-            condition,
-            then,
-            &[],
-            after,
-            &args.iter().map(|&arg| self.take(arg)).collect::<Vec<_>>(),
-        );
+        let results = args
+            .iter()
+            .map(|&arg| {
+                fb.append_block_param(after, fb.func.dfg.value_type(arg))
+            })
+            .collect();
+
+        fb.ins().brif(condition, then, &[], after, args);
         fb.seal_block(then);
 
         fb.switch_to_block(then);
-        for assignment in &body.assignments {
-            self.compile_assignment(assignment, fb);
-        }
-        for (value, out) in std::iter::zip(to, &body.outputs) {
-            self.set(
-                value,
-                fb.append_block_param(
-                    after,
-                    fb.func.dfg.value_type(self.ssa_values[out]),
-                ),
-            );
-        }
-        fb.ins().jump(
-            after,
-            &body
-                .outputs
-                .iter()
-                .map(|&out| self.take(out))
-                .collect::<Vec<_>>(),
-        );
+        let body_outputs = self.compile_graph(body, args, fb);
+        fb.ins().jump(after, &body_outputs);
         fb.seal_block(after);
 
         fb.switch_to_block(after);
+
+        results
     }
 
     fn compile_then_else(
         &mut self,
-        to: ssa::VarSequence,
-        args: &[ssa::Var],
+        args: &[Value],
         then: &ssa::Graph,
         else_: &ssa::Graph,
         fb: &mut FunctionBuilder,
-    ) {
+    ) -> Vec<Value> {
         let (&condition, args) = args.split_last().unwrap();
-
-        for (arg, input) in std::iter::zip(args, then.inputs) {
-            self.set(input, self.ssa_values[arg]);
-        }
-        for (&arg, input) in std::iter::zip(args, else_.inputs) {
-            let clif_value = self.take(arg);
-            self.set(input, clif_value);
-        }
 
         let then_block = fb.create_block();
         let else_block = fb.create_block();
         let after_block = fb.create_block();
 
-        let condition = self.take(condition);
         fb.ins().brif(condition, then_block, &[], else_block, &[]);
         fb.seal_block(then_block);
         fb.seal_block(else_block);
 
         fb.switch_to_block(then_block);
-        for assignment in &then.assignments {
-            self.compile_assignment(assignment, fb);
-        }
-        for (value, out) in std::iter::zip(to, &then.outputs) {
-            let v = self.ssa_values[out];
-            self.set(
-                value,
-                fb.append_block_param(after_block, fb.func.dfg.value_type(v)),
-            );
-        }
-        fb.ins().jump(
-            after_block,
-            &then
-                .outputs
-                .iter()
-                .map(|&out| self.take(out))
-                .collect::<Vec<_>>(),
-        );
+        let then_outputs = self.compile_graph(then, args, fb);
+        let results = then_outputs
+            .iter()
+            .map(|&output| {
+                fb.append_block_param(
+                    after_block,
+                    fb.func.dfg.value_type(output),
+                )
+            })
+            .collect();
+        fb.ins().jump(after_block, &then_outputs);
 
         fb.switch_to_block(else_block);
-        for assignment in &else_.assignments {
-            self.compile_assignment(assignment, fb);
-        }
-        fb.ins().jump(
-            after_block,
-            &else_
-                .outputs
-                .iter()
-                .map(|&out| self.take(out))
-                .collect::<Vec<_>>(),
-        );
+        let else_outputs = self.compile_graph(else_, args, fb);
+        fb.ins().jump(after_block, &else_outputs);
         fb.seal_block(after_block);
 
         fb.switch_to_block(after_block);
+
+        results
     }
 
     fn compile_repeat(
         &mut self,
-        to: ssa::VarSequence,
-        args: &[ssa::Var],
+        args: &[Value],
         body: &ssa::Graph,
         fb: &mut FunctionBuilder,
-    ) {
+    ) -> Vec<Value> {
         let loop_block = fb.create_block();
         let after_block = fb.create_block();
 
-        for (arg, input) in std::iter::zip(args, body.inputs) {
-            let v = self.ssa_values[arg];
-            self.set(
-                input,
-                fb.append_block_param(loop_block, fb.func.dfg.value_type(v)),
-            );
-        }
+        let loop_args = args
+            .iter()
+            .map(|&arg| {
+                fb.append_block_param(loop_block, fb.func.dfg.value_type(arg))
+            })
+            .collect::<Box<_>>();
 
-        fb.ins().jump(
-            loop_block,
-            &args.iter().map(|&arg| self.take(arg)).collect::<Vec<_>>(),
-        );
+        fb.ins().jump(loop_block, args);
         fb.switch_to_block(loop_block);
-        for assignment in &body.assignments {
-            self.compile_assignment(assignment, fb);
-        }
-        let (&condition, outputs) = body.outputs.split_last().unwrap();
-        for (value, out) in std::iter::zip(to, outputs) {
-            self.set(value, self.ssa_values[out]);
-        }
-        fb.ins().brif(
-            self.take(condition),
-            loop_block,
-            &outputs
-                .iter()
-                .map(|&out| self.take(out))
-                .collect::<Vec<_>>(),
-            after_block,
-            &[],
-        );
+        let mut loop_outputs = self.compile_graph(body, &loop_args, fb);
+        let condition = loop_outputs.pop().unwrap();
+        fb.ins()
+            .brif(condition, loop_block, &loop_outputs, after_block, &[]);
         fb.seal_block(loop_block);
         fb.seal_block(after_block);
 
         fb.switch_to_block(after_block);
+
+        loop_outputs
     }
 }
 
