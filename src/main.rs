@@ -58,8 +58,8 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
 
             let program = parser::parse(&file)?;
             let program = typ::check(program)?;
-            let mut value_generator = ssa::ValueGenerator::default();
-            let program = ssa::convert(program, &mut value_generator);
+            let mut var_generator = ssa::VarGenerator::default();
+            let program = ssa::convert(program, &mut var_generator);
             let graph = call_graph::of(program.function_bodies);
 
             if std::env::var_os("SPACKEL_PRINT_SSA").is_some() {

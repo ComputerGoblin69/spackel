@@ -89,7 +89,7 @@ pub fn compile(
 struct Compiler<'a> {
     clif_function_signatures: BTreeMap<&'a str, Signature>,
     function_ids: BTreeMap<&'a str, FuncId>,
-    ssa_values: BTreeMap<ssa::Value, Value>,
+    ssa_values: BTreeMap<ssa::Var, Value>,
     isa: &'a dyn TargetIsa,
     object_module: ObjectModule,
     extern_functions: BTreeMap<&'static str, FuncId>,
@@ -97,13 +97,13 @@ struct Compiler<'a> {
 }
 
 impl Compiler<'_> {
-    fn take(&mut self, value: ssa::Value) -> Value {
+    fn take(&mut self, value: ssa::Var) -> Value {
         self.ssa_values
             .remove(&value)
             .unwrap_or_else(|| panic!("{value:?} is not defined"))
     }
 
-    fn set(&mut self, value: ssa::Value, clif_value: Value) {
+    fn set(&mut self, value: ssa::Var, clif_value: Value) {
         self.ssa_values.insert(value, clif_value);
     }
 
@@ -363,8 +363,8 @@ impl Compiler<'_> {
 
     fn compile_then(
         &mut self,
-        to: ssa::ValueSequence,
-        args: &[ssa::Value],
+        to: ssa::VarSequence,
+        args: &[ssa::Var],
         body: &ssa::Graph,
         fb: &mut FunctionBuilder,
     ) {
@@ -416,8 +416,8 @@ impl Compiler<'_> {
 
     fn compile_then_else(
         &mut self,
-        to: ssa::ValueSequence,
-        args: &[ssa::Value],
+        to: ssa::VarSequence,
+        args: &[ssa::Var],
         then: &ssa::Graph,
         else_: &ssa::Graph,
         fb: &mut FunctionBuilder,
@@ -480,8 +480,8 @@ impl Compiler<'_> {
 
     fn compile_repeat(
         &mut self,
-        to: ssa::ValueSequence,
-        args: &[ssa::Value],
+        to: ssa::VarSequence,
+        args: &[ssa::Var],
         body: &ssa::Graph,
         fb: &mut FunctionBuilder,
     ) {

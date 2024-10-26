@@ -12,7 +12,7 @@ pub struct Program<'src> {
 
 pub fn convert<'src>(
     program: crate::typ::CheckedProgram<'src>,
-    value_generator: &mut ValueGenerator,
+    var_generator: &mut VarGenerator,
 ) -> Program<'src> {
     let function_bodies = program
         .function_bodies
@@ -27,7 +27,7 @@ pub fn convert<'src>(
                 body,
                 input_count,
                 &program.function_signatures,
-                value_generator,
+                var_generator,
             );
             (name, body)
         })
@@ -40,34 +40,34 @@ pub fn convert<'src>(
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Value(u32);
+pub struct Var(u32);
 
-impl fmt::Debug for Value {
+impl fmt::Debug for Var {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "v{}", self.0)
     }
 }
 
 #[derive(Clone, Copy, Default)]
-pub struct ValueSequence {
+pub struct VarSequence {
     start: u32,
     count: u8,
 }
 
-impl fmt::Debug for ValueSequence {
+impl fmt::Debug for VarSequence {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "[{:?}]",
             (self.start..self.start + u32::from(self.count))
-                .map(Value)
+                .map(Var)
                 .format(", ")
         )
     }
 }
 
-impl From<Value> for ValueSequence {
-    fn from(value: Value) -> Self {
+impl From<Var> for VarSequence {
+    fn from(value: Var) -> Self {
         Self {
             start: value.0,
             count: 1,
@@ -75,41 +75,41 @@ impl From<Value> for ValueSequence {
     }
 }
 
-impl IntoIterator for ValueSequence {
-    type Item = Value;
+impl IntoIterator for VarSequence {
+    type Item = Var;
 
-    type IntoIter = ValueSequenceIter;
+    type IntoIter = VarSequenceIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
 }
 
-impl std::ops::Add<u8> for ValueSequence {
-    type Output = Value;
+impl std::ops::Add<u8> for VarSequence {
+    type Output = Var;
 
     fn add(self, rhs: u8) -> Self::Output {
         debug_assert!(rhs < self.count);
-        Value(self.start + u32::from(rhs))
+        Var(self.start + u32::from(rhs))
     }
 }
 
-impl ValueSequence {
-    const fn iter(self) -> ValueSequenceIter {
-        ValueSequenceIter(self)
+impl VarSequence {
+    const fn iter(self) -> VarSequenceIter {
+        VarSequenceIter(self)
     }
 }
 
-pub struct ValueSequenceIter(ValueSequence);
+pub struct VarSequenceIter(VarSequence);
 
-impl Iterator for ValueSequenceIter {
-    type Item = Value;
+impl Iterator for VarSequenceIter {
+    type Item = Var;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.0.count == 0 {
             None
         } else {
-            let res = Value(self.0.start);
+            let res = Var(self.0.start);
             self.0.start += 1;
             self.0.count -= 1;
             Some(res)
@@ -118,21 +118,21 @@ impl Iterator for ValueSequenceIter {
 }
 
 #[derive(Default)]
-pub struct ValueGenerator(u32);
+pub struct VarGenerator(u32);
 
-impl ValueGenerator {
-    pub fn new_value_sequence(&mut self, count: u8) -> ValueSequence {
+impl VarGenerator {
+    pub fn new_var_sequence(&mut self, count: u8) -> VarSequence {
         let start = self.0;
         self.0 += u32::from(count);
-        ValueSequence { start, count }
+        VarSequence { start, count }
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct Graph {
-    pub inputs: ValueSequence,
+    pub inputs: VarSequence,
     pub assignments: Vec<Assignment>,
-    pub outputs: Vec<Value>,
+    pub outputs: Vec<Var>,
 }
 
 impl Graph {
@@ -140,9 +140,9 @@ impl Graph {
         block: Box<Block<Generics>>,
         input_count: u8,
         function_signatures: &BTreeMap<&str, FunctionSignature>,
-        value_generator: &mut ValueGenerator,
+        var_generator: &mut VarGenerator,
     ) -> Self {
-        let inputs = value_generator.new_value_sequence(input_count);
+        let inputs = var_generator.new_var_sequence(input_count);
         let mut graph = Self {
             inputs,
             assignments: Vec::new(),
@@ -152,7 +152,7 @@ impl Graph {
         for instruction in block {
             graph.add_instruction(
                 instruction,
-                value_generator,
+                var_generator,
                 function_signatures,
                 &mut stack,
             );
@@ -185,9 +185,9 @@ impl Graph {
     fn add_instruction(
         &mut self,
         (instruction, generics): (Instruction<Generics>, Generics),
-        value_generator: &mut ValueGenerator,
+        var_generator: &mut VarGenerator,
         function_signatures: &BTreeMap<&str, FunctionSignature>,
-        stack: &mut Vec<Value>,
+        stack: &mut Vec<Var>,
     ) {
         let (to_count, arg_count, op) = match instruction {
             Instruction::Call(name) => {
@@ -203,7 +203,7 @@ impl Graph {
                     body,
                     (stack.len() - 1).try_into().unwrap(),
                     function_signatures,
-                    value_generator,
+                    var_generator,
                 );
                 (stack.len() - 1, stack.len(), Op::Then(Box::new(body_graph)))
             }
@@ -212,13 +212,13 @@ impl Graph {
                     then,
                     (stack.len() - 1).try_into().unwrap(),
                     function_signatures,
-                    value_generator,
+                    var_generator,
                 );
                 let else_graph = Self::from_block(
                     else_,
                     (stack.len() - 1).try_into().unwrap(),
                     function_signatures,
-                    value_generator,
+                    var_generator,
                 );
                 (
                     then_graph.outputs.len(),
@@ -231,7 +231,7 @@ impl Graph {
                     body,
                     stack.len().try_into().unwrap(),
                     function_signatures,
-                    value_generator,
+                    var_generator,
                 );
                 (stack.len(), stack.len(), Op::Repeat(Box::new(body_graph)))
             }
@@ -239,7 +239,7 @@ impl Graph {
                 for instruction in body {
                     self.add_instruction(
                         instruction,
-                        value_generator,
+                        var_generator,
                         function_signatures,
                         stack,
                     );
@@ -314,7 +314,7 @@ impl Graph {
                         Instruction::Dup,
                         Box::new([Box::into_iter(generics).next().unwrap()]),
                     ),
-                    value_generator,
+                    var_generator,
                     function_signatures,
                     stack,
                 );
@@ -329,7 +329,7 @@ impl Graph {
                         Instruction::Dup,
                         Box::new([Box::into_iter(generics).nth(1).unwrap()]),
                     ),
-                    value_generator,
+                    var_generator,
                     function_signatures,
                     stack,
                 );
@@ -338,8 +338,7 @@ impl Graph {
                 return;
             }
         };
-        let to =
-            value_generator.new_value_sequence(to_count.try_into().unwrap());
+        let to = var_generator.new_var_sequence(to_count.try_into().unwrap());
         let remaining_len = stack.len() - arg_count;
         let args = stack[remaining_len..].into();
         stack.truncate(remaining_len);
@@ -350,8 +349,8 @@ impl Graph {
 
 #[derive(Clone)]
 pub struct Assignment {
-    pub to: ValueSequence,
-    pub args: Box<[Value]>,
+    pub to: VarSequence,
+    pub args: Box<[Var]>,
     pub op: Op,
 }
 
