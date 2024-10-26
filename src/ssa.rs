@@ -1,17 +1,9 @@
-mod renaming;
-
 use crate::{
-    call_graph::Function,
     ir::{BinLogicOp, BinMathOp, Block, Comparison, Instruction},
     typ::{FunctionSignature, Generics, Type},
 };
 use itertools::Itertools;
-use renaming::Renames;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt, mem,
-    ops::ControlFlow,
-};
+use std::{collections::BTreeMap, fmt, ops::ControlFlow};
 
 pub struct Program<'src> {
     pub function_signatures: BTreeMap<&'src str, FunctionSignature>,
@@ -106,10 +98,6 @@ impl ValueSequence {
     const fn iter(self) -> ValueSequenceIter {
         ValueSequenceIter(self)
     }
-
-    const fn count(self) -> u8 {
-        self.count
-    }
 }
 
 pub struct ValueSequenceIter(ValueSequence);
@@ -171,23 +159,6 @@ impl Graph {
         }
         graph.outputs = stack;
         graph
-    }
-
-    pub fn is_small_enough_to_inline(&self) -> bool {
-        self.contains_at_most_n_ops(10)
-    }
-
-    fn contains_at_most_n_ops(&self, n: usize) -> bool {
-        let mut op_count = 0;
-        self.each_op(&mut |_| {
-            if op_count < n {
-                op_count += 1;
-                ControlFlow::Continue(())
-            } else {
-                ControlFlow::Break(())
-            }
-        })
-        .is_continue()
     }
 
     pub fn each_op<B>(
@@ -419,142 +390,4 @@ pub enum Op {
     Compare(Comparison),
     AddrOf(Type),
     ReadPtr(Type),
-}
-
-impl Op {
-    const fn pure(&self) -> bool {
-        // Most operations are pure, so it's more convenient to list the
-        // *impure* ones.
-        !matches!(
-            self,
-            Self::Then(_)
-                | Self::ThenElse(..)
-                | Self::Repeat(_)
-                | Self::Call(_)
-                | Self::PrintChar
-                | Self::PrintI32
-                | Self::PrintF32
-                | Self::PrintlnI32
-                | Self::PrintlnF32
-                // Division by zero and maybe overflow?
-                | Self::BinMath { typ: Some(Type::I32), .. }
-        )
-    }
-}
-
-pub fn rebuild_graph_inlining(
-    graph: &mut Graph,
-    function: &Function,
-    value_generator: &mut ValueGenerator,
-) {
-    let mut renames = Renames::default();
-    for mut assignment in mem::take(&mut graph.assignments) {
-        if matches!(&assignment.op, Op::Call(name) if **name == *function.name)
-        {
-            let mut function = function.body.clone();
-            refresh_graph(&mut function, value_generator, false);
-
-            renames.extend(
-                function.inputs.iter().zip(assignment.args.iter().copied()),
-            );
-
-            for mut assignment in function.assignments {
-                renames.apply_to_slice(&mut assignment.args);
-                graph.assignments.push(assignment);
-            }
-
-            renames.apply_to_slice(&mut function.outputs);
-            renames.extend(assignment.to.iter().zip(function.outputs));
-        } else {
-            renames.apply_to_slice(&mut assignment.args);
-            graph.assignments.push(assignment);
-        }
-    }
-    renames.apply_to_slice(&mut graph.outputs);
-}
-
-fn refresh_graph(
-    graph: &mut Graph,
-    value_generator: &mut ValueGenerator,
-    including_inputs: bool,
-) {
-    let mut renames = renaming::Renames::default();
-
-    if including_inputs {
-        let inputs = value_generator.new_value_sequence(graph.inputs.count());
-        renames.extend(std::iter::zip(graph.inputs, inputs));
-        graph.inputs = inputs;
-    }
-
-    for assignment in &mut graph.assignments {
-        renames.apply_to_slice(&mut assignment.args);
-        let to = value_generator.new_value_sequence(assignment.to.count());
-        renames.extend(std::iter::zip(assignment.to, to));
-        assignment.to = to;
-
-        match &mut assignment.op {
-            Op::Then(body) | Op::Repeat(body) => {
-                refresh_graph(body, value_generator, true);
-            }
-            Op::ThenElse(then, else_) => {
-                refresh_graph(then, value_generator, true);
-                refresh_graph(else_, value_generator, true);
-            }
-            _ => {}
-        }
-    }
-
-    renames.apply_to_slice(&mut graph.outputs);
-}
-
-pub fn propagate_drops(graph: &mut Graph) -> bool {
-    let mut did_something = false;
-
-    // Recurse.
-    for assignment in &mut graph.assignments {
-        did_something |= match &mut assignment.op {
-            Op::Then(body) | Op::Repeat(body) => propagate_drops(body),
-            Op::ThenElse(then, else_) => {
-                propagate_drops(then) || propagate_drops(else_)
-            }
-            _ => false,
-        }
-    }
-
-    let mut useless_values = BTreeSet::new();
-    let mut out = Vec::new();
-    for assignment in mem::take(&mut graph.assignments).into_iter().rev() {
-        if assignment.op.pure()
-            && assignment
-                .to
-                .iter()
-                .all(|res| useless_values.contains(&res))
-        {
-            did_something |= !matches!(assignment.op, Op::Drop);
-            // If the values produced by a pure operation are all useless then the
-            // arguments are also useless.
-            useless_values.extend(assignment.args.iter().copied());
-            // The operation is pure and useless, so remove it and just drop
-            // its arguments.
-            out.extend(assignment.args.iter().map(|&arg| Assignment {
-                to: ValueSequence::default(),
-                args: [arg].into(),
-                op: Op::Drop,
-            }));
-        } else {
-            out.push(assignment);
-        }
-    }
-    out.reverse();
-
-    // Remove drops for values created by useless operations.
-    let mut produced = graph.inputs.iter().collect::<BTreeSet<_>>();
-    out.retain(|assignment| {
-        produced.extend(assignment.to);
-        assignment.args.iter().all(|arg| produced.contains(arg))
-    });
-
-    graph.assignments = out;
-
-    did_something
 }

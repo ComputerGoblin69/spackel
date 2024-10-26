@@ -60,17 +60,9 @@ fn real_main(code_map: &mut CodeMap) -> Result<()> {
             let program = typ::check(program)?;
             let mut value_generator = ssa::ValueGenerator::default();
             let program = ssa::convert(program, &mut value_generator);
-            let mut graph = call_graph::of(program.function_bodies);
+            let graph = call_graph::of(program.function_bodies);
 
             if std::env::var_os("SPACKEL_PRINT_SSA").is_some() {
-                for function in graph.node_weights() {
-                    eprintln!("{}: {:#?}", function.name, function.body);
-                }
-            }
-
-            call_graph::optimize(&mut graph, &mut value_generator);
-
-            if std::env::var_os("SPACKEL_PRINT_OPTIMIZED_SSA").is_some() {
                 for function in graph.node_weights() {
                     eprintln!("{}: {:#?}", function.name, function.body);
                 }
