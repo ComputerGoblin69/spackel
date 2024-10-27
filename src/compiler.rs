@@ -19,7 +19,7 @@ use cranelift::prelude::{
 };
 use cranelift_module::{FuncId, Linkage, Module};
 use cranelift_object::{ObjectBuilder, ObjectModule};
-use std::{collections::BTreeMap, fs::File, io::Write, path::Path};
+use std::{collections::BTreeMap, fs, path::Path};
 
 pub struct Options<'a> {
     pub target_triple: &'a str,
@@ -79,8 +79,7 @@ pub fn compile(
     compiler.compile(functions)?;
 
     let object_bytes = compiler.object_module.finish().emit()?;
-    let mut object_file = File::create(options.out_path)?;
-    object_file.write_all(&object_bytes)?;
+    fs::write(options.out_path, &object_bytes)?;
 
     Ok(())
 }
