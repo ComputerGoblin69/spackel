@@ -1,5 +1,5 @@
 use crate::ssa::Op;
-use petgraph::prelude::DiGraph;
+use petgraph::prelude::{DiGraph, EdgeIndex};
 use std::{collections::BTreeMap, convert::Infallible, ops::ControlFlow};
 
 pub type CallGraph<'src> = DiGraph<Function<'src>, ()>;
@@ -20,10 +20,10 @@ pub fn of(mut function_bodies: BTreeMap<&str, crate::ssa::Graph>) -> CallGraph {
 
     for (caller, body) in &function_bodies {
         let start = nodes[&**caller];
-        body.each_op(&mut |op| {
+        let ControlFlow::Continue(()) = body.each_op(&mut |op| {
             if let Op::Call(called_function) = op {
                 let end = nodes[&**called_function];
-                graph.update_edge(start, end, ());
+                let _: EdgeIndex = graph.update_edge(start, end, ());
             }
             ControlFlow::<Infallible>::Continue(())
         });

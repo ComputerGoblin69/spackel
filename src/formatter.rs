@@ -11,7 +11,7 @@ pub fn format(source_code: &str) -> String {
         formatter.emit_token(token);
     }
     if formatter.output.ends_with("\n\n") {
-        formatter.output.pop();
+        let _: Option<char> = formatter.output.pop();
     }
     formatter.output
 }

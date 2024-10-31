@@ -145,7 +145,7 @@ impl<'src> Checker<'src> {
             .map(|instruction| self.check_instruction(instruction))
             .collect::<Result<_>>()?;
 
-        self.transform(
+        let _: Box<[Type]> = self.transform(
             &[],
             &self.function_signatures[name]
                 .returns
@@ -366,7 +366,8 @@ impl<'src> Checker<'src> {
                 let body = Box::into_iter(body)
                     .map(|instruction| self.check_instruction(instruction))
                     .collect::<Result<_>>()?;
-                self.transform(&[], &[C(Bool)], &[], end_span)?;
+                let _: Box<[Type]> =
+                    self.transform(&[], &[C(Bool)], &[], end_span)?;
                 ensure!(
                     before == self.stack,
                     diagnostics::error(

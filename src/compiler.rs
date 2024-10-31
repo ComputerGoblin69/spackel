@@ -159,10 +159,11 @@ impl Compiler<'_> {
             outputs.push(fb.ins().iconst(I32, 0));
         }
 
-        fb.ins().return_(&outputs);
+        let _: Inst = fb.ins().return_(&outputs);
 
         fb.finalize();
-        self.object_module.define_function(func_id, ctx)?;
+        let _: cranelift_module::ModuleCompiledFunction =
+            self.object_module.define_function(func_id, ctx)?;
 
         Ok(())
     }
@@ -246,23 +247,23 @@ impl Compiler<'_> {
             Op::Bool(b) => Vec::from([fb.ins().iconst(I8, i64::from(*b))]),
             Op::Type | Op::TypeOf | Op::Ptr => todo!(),
             Op::PrintChar => {
-                self.call_extern("spkl_print_char", args, fb);
+                let _: Inst = self.call_extern("spkl_print_char", args, fb);
                 Vec::new()
             }
             Op::PrintI32 => {
-                self.call_extern("spkl_print_i32", args, fb);
+                let _: Inst = self.call_extern("spkl_print_i32", args, fb);
                 Vec::new()
             }
             Op::PrintF32 => {
-                self.call_extern("spkl_print_f32", args, fb);
+                let _: Inst = self.call_extern("spkl_print_f32", args, fb);
                 Vec::new()
             }
             Op::PrintlnI32 => {
-                self.call_extern("spkl_println_i32", args, fb);
+                let _: Inst = self.call_extern("spkl_println_i32", args, fb);
                 Vec::new()
             }
             Op::PrintlnF32 => {
-                self.call_extern("spkl_println_f32", args, fb);
+                let _: Inst = self.call_extern("spkl_println_f32", args, fb);
                 Vec::new()
             }
             Op::BinMath { operation, typ } => {
@@ -328,7 +329,7 @@ impl Compiler<'_> {
                     size: typ.bytes(),
                 });
                 let v = args[0];
-                fb.ins().stack_store(v, stack_slot, 0);
+                let _: Inst = fb.ins().stack_store(v, stack_slot, 0);
                 let res =
                     fb.ins().stack_addr(self.isa.pointer_type(), stack_slot, 0);
                 Vec::from([v, res])
@@ -359,12 +360,12 @@ impl Compiler<'_> {
             })
             .collect();
 
-        fb.ins().brif(condition, then, &[], after, args);
+        let _: Inst = fb.ins().brif(condition, then, &[], after, args);
         fb.seal_block(then);
 
         fb.switch_to_block(then);
         let body_outputs = self.compile_graph(body, args, fb);
-        fb.ins().jump(after, &body_outputs);
+        let _: Inst = fb.ins().jump(after, &body_outputs);
         fb.seal_block(after);
 
         fb.switch_to_block(after);
@@ -385,7 +386,8 @@ impl Compiler<'_> {
         let else_block = fb.create_block();
         let after_block = fb.create_block();
 
-        fb.ins().brif(condition, then_block, &[], else_block, &[]);
+        let _: Inst =
+            fb.ins().brif(condition, then_block, &[], else_block, &[]);
         fb.seal_block(then_block);
         fb.seal_block(else_block);
 
@@ -400,11 +402,11 @@ impl Compiler<'_> {
                 )
             })
             .collect();
-        fb.ins().jump(after_block, &then_outputs);
+        let _: Inst = fb.ins().jump(after_block, &then_outputs);
 
         fb.switch_to_block(else_block);
         let else_outputs = self.compile_graph(else_, args, fb);
-        fb.ins().jump(after_block, &else_outputs);
+        let _: Inst = fb.ins().jump(after_block, &else_outputs);
         fb.seal_block(after_block);
 
         fb.switch_to_block(after_block);
@@ -428,12 +430,17 @@ impl Compiler<'_> {
             })
             .collect::<Box<_>>();
 
-        fb.ins().jump(loop_block, args);
+        let _: Inst = fb.ins().jump(loop_block, args);
         fb.switch_to_block(loop_block);
         let mut loop_outputs = self.compile_graph(body, &loop_args, fb);
         let condition = loop_outputs.pop().unwrap();
-        fb.ins()
-            .brif(condition, loop_block, &loop_outputs, after_block, &[]);
+        let _: Inst = fb.ins().brif(
+            condition,
+            loop_block,
+            &loop_outputs,
+            after_block,
+            &[],
+        );
         fb.seal_block(loop_block);
         fb.seal_block(after_block);
 

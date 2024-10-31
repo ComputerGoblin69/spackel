@@ -104,7 +104,7 @@ impl Interpreter<'_> {
                 self.push(Value::Type(Type::Ptr(Box::new(inner))));
             }
             Instruction::TypeOf => {
-                self.pop();
+                let _: Value = self.pop();
                 self.push(Value::Type(generics[0].clone()));
             }
             Instruction::Print if generics[0] == Type::F32 => {
@@ -187,7 +187,7 @@ impl Interpreter<'_> {
             }
             Instruction::AddrOf | Instruction::ReadPtr => todo!(),
             Instruction::Drop => {
-                self.pop();
+                let _: Value = self.pop();
             }
             Instruction::Dup => {
                 let v = self.pop();
@@ -209,7 +209,7 @@ impl Interpreter<'_> {
             }
             Instruction::Nip => {
                 let b = self.pop();
-                self.pop();
+                let _: Value = self.pop();
                 self.push(b);
             }
             Instruction::Tuck => {

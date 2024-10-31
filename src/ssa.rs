@@ -75,7 +75,10 @@ impl Graph {
         let mut stack = (0..input_count)
             .map(|input_index| {
                 let input = var_generator.new_var();
-                graph.defs.insert(input, Def::Input { index: input_index });
+                assert!(graph
+                    .defs
+                    .insert(input, Def::Input { index: input_index })
+                    .is_none());
                 input
             })
             .collect();
@@ -297,13 +300,16 @@ impl Graph {
 
         for sub_index in 0..result_count {
             let result = var_generator.new_var();
-            self.defs.insert(
-                result,
-                Def::Op {
-                    index: op_index,
-                    sub_index,
-                },
-            );
+            assert!(self
+                .defs
+                .insert(
+                    result,
+                    Def::Op {
+                        index: op_index,
+                        sub_index,
+                    },
+                )
+                .is_none());
             stack.push(result);
         }
     }
