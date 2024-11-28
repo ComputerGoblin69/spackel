@@ -119,7 +119,7 @@ struct Checker<'src> {
 }
 
 impl<'src> Checker<'src> {
-    fn check(mut self, program: Program<'src>) -> Result<CheckedProgram> {
+    fn check(mut self, program: Program<'src>) -> Result<CheckedProgram<'src>> {
         let function_bodies = program
             .functions
             .into_iter()
@@ -488,7 +488,10 @@ enum Pattern {
 }
 
 impl Pattern {
-    const fn display<'a>(&'a self, generics: &'a [Generic]) -> DisplayPattern {
+    const fn display<'a>(
+        &'a self,
+        generics: &'a [Generic],
+    ) -> DisplayPattern<'a> {
         DisplayPattern {
             pattern: self,
             generics,
